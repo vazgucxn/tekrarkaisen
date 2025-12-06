@@ -109,7 +109,7 @@ client.on("messageCreate", async (message) => {
             const max = Number(maxStr);
             if (!maxStr || isNaN(max) || max < 1) {
                 return message.reply(
-                    "❌ Kişi sayısını doğru gir. Örn: `.otoban #kanal 20 redzone etkinliği`"
+                    "❌ Kişi sayısını doğru gi. Örn: `.otoban #kanal 20 redzone etkinliği`"
                 );
             }
 
@@ -530,3 +530,4 @@ async function updateOtobanMessage(message, data) {
 
 // ------------- BOTU BAŞLAT -------------
 client.login(TOKEN);
+
