@@ -133,7 +133,7 @@ app.listen(port, () => console.log(`Keep-Alive sunucusu ${port} portunda çalı�
 client.on('clientReady', async () => {
     console.log(`Botunuz başarıyla giriş yaptı: ${client.user.tag}`);
     client.user.setPresence({
-        activities: [{ name: 'vazgucxn ❤️ Kaines', type: ActivityType.Streaming, url: 'https://www.twitch.tv/discord' }],
+        activities: [{ name: 'vazgucxn ❤️ Kaisen', type: ActivityType.Streaming, url: 'https://www.twitch.tv/discord' }],
         status: 'online', 
     });
     await initializeDatabase(); 
@@ -1361,5 +1361,6 @@ async function updateEventEmbed(message) {
 
 
 client.login(BOT_TOKEN);
+
 
 
