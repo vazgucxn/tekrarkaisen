@@ -53,18 +53,6 @@ const client = new Client({
     partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
-
-// ------------- CLIENT -------------
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMessageReactions,
-    ],
-    partials: [Partials.Message, Partials.Channel, Partials.Reaction],
-});
-
 // ------------- SLASH KOMUTLARI TANIMI -------------
 const commands = [
     {
@@ -607,5 +595,6 @@ client.on('messageReactionRemove', async (reaction, user) => {
 // ------------- BOTU ÇALIŞTIR -------------
 
 client.login(TOKEN);
+
 
 
