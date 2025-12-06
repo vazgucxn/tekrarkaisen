@@ -25,12 +25,12 @@ app.listen(process.env.PORT || 3000, () => {
 // ------------- ENV DEĞİŞKENLERİ -------------
 const TOKEN = process.env.TOKEN;       // BOT TOKEN
 const CLIENT_ID = process.env.CLIENT_ID; // APPLICATION ID
-const GUILD_ID = process.env.GUILD_ID; // KAISEN SUNUCU ID
+const GUILD_ID = process.env.GUILD_ID;   // KAISEN SUNUCU ID
 
-if (!1446184127098523710 || !1414937526241591298) {
-    const TOKEN = process.env.TOKEN;
+if (!MTQ0NjE4NDEyNzA5ODUyMzcxMA.GGXK5c.Load4Vf9A3x1tRcvXjnfUyAtVQUM0uFqFWmn_0 || !1446184127098523710 || !1414937526241591298) {
     console.log('Lütfen TOKEN, CLIENT_ID ve GUILD_ID environment değişkenlerini ayarla!');
 }
+
 
 // ------------- CLIENT -------------
 const client = new Client({
