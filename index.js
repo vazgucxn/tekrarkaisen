@@ -9,34 +9,6 @@ const { Pool } = pg;
 const axios = require('axios'); 
 // Ses kütüphaneleri isteğiniz üzerine kaldırılmıştır.
 
-// -------------------------------------------------------
-// Bu fonksiyon ETKİNLİK embedini günceller
-// -------------------------------------------------------
-async function updateEventEmbed(eventMessage) {
-    if (!eventMessage) return;
-
-    const etkinlikId = eventMessage.id;
-
-    const data = await pool.query(
-        "SELECT user_id FROM etkinlik_katilim WHERE message_id = $1 AND user_id != 'MAX_COUNT'",
-        [etkinlikId]
-    );
-
-    const users = data.rows.map(r => `<@${r.user_id}>`);
-    const list = users.length ? users.join('\n') : '(Henüz kimse katılmadı)';
-
-    const maxCount = 20; // istersen DB'den de çekebilirsin
-
-    const embed = EmbedBuilder.from(eventMessage.embeds[0]);
-
-    embed.data.fields[0].value = list;
-    embed.data.fields[0].name = `Katılımcılar (${users.length}/${maxCount})`;
-
-    await eventMessage.edit({ embeds: [embed] }).catch(() => {});
-}
-
-
-
 // =======================================================
 // 🔑 GİZLİ AYARLAR VE YAPILANDIRMALAR
 // =======================================================
@@ -1359,9 +1331,52 @@ async function updateEventEmbed(message) {
     message.edit({ embeds: [updatedEmbed] });
 }
 
+async function updateEventEmbed(message) {
+    if (!message) return;
+
+    // SQL’den çek
+    const participants = await pool.query(
+        `SELECT user_id FROM etkinlik_katilim 
+         WHERE message_id = $1 AND user_id != 'MAX_COUNT'`,
+        [message.id]
+    );
+
+    const maxCountRow = await pool.query(
+        `SELECT * FROM etkinlik_katilim 
+         WHERE message_id = $1 AND user_id = 'MAX_COUNT'`,
+        [message.id]
+    );
+
+    if (maxCountRow.rowCount === 0) return; // Bitmiş / silinmiş etkinlik
+
+    const maxCount = message.embeds[0].footer.text.split(": ")[1];
+
+    const listText =
+        participants.rowCount > 0
+            ? participants.rows.map(r => `<@${r.user_id}>`).join("\n")
+            : "(Henüz kimse katılmadı)";
+
+    const updatedEmbed = new EmbedBuilder()
+        .setColor(0x000000)
+        .setTitle(message.embeds[0].title)
+        .setDescription(message.embeds[0].description)
+        .addFields([
+            {
+                name: `Katılımcılar (${participants.rowCount}/${maxCount})`,
+                value: listText,
+            },
+        ])
+        .setFooter({ text: `Maksimum Katılımcı: ${maxCount}` })
+        .setTimestamp();
+
+    await message.edit({ embeds: [updatedEmbed] }).catch(() => {});
+}
+
+client.login(BOT_TOKEN);
 
 
 client.login(BOT_TOKEN);
+
 
 
 
