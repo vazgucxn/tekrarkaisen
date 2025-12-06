@@ -9,7 +9,7 @@ const { Pool } = pg;
 const axios = require('axios'); 
 // Ses kütüphaneleri isteğiniz üzerine kaldırılmıştır.
 
-async function updateEventEmbed(eventMessage) {
+
     if (!eventMessage) return;
 
     const etkinlikId = eventMessage.id;
@@ -1354,6 +1354,7 @@ async function updateEventEmbed(message) {
 
     message.edit({ embeds: [updatedEmbed] });
 }
+
 
 
 client.login(BOT_TOKEN);
