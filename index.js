@@ -9,6 +9,242 @@ const { Pool } = pg;
 const axios = require('axios'); 
 // Ses kütüphaneleri isteğiniz üzerine kaldırılmıştır.
 
+    // --- .etkinlik (Katıl – Ayrıl – SQL ile yönetim) ---
+    if (command === '.etkinlik') {
+        if (!isOwner) return message.reply("Bu komutu kullanmaya yetkiniz yok.");
+
+        const maxParticipants = parseInt(args[1]) || 20;
+        const eventTitle = args.slice(2).join(" ");
+
+        if (!eventTitle)
+            return message.reply("Kullanım: `.etkinlik [Max Kişi] [Etkinlik Adı]`");
+
+        const eventEmbed = new EmbedBuilder()
+            .setColor(0x000000)
+            .setTitle(`🎉 YENİ ETKİNLİK: ${eventTitle}`)
+            .setDescription(`**Katılmak için aşağıdaki ✅ emojisine tıklayın!**`)
+            .addFields([
+                { name: `Katılımcılar (0/${maxParticipants})`, value: "(Henüz kimse katılmadı)" }
+            ])
+            .setFooter({ text: `Maksimum Katılımcı: ${maxParticipants}` })
+            .setTimestamp();
+
+        const sentMessage = await message.channel.send({
+            content: "@here",
+            embeds: [eventEmbed],
+        });
+
+        await sentMessage.react("✅").catch(console.error);
+
+        // SQL'e etkinlik oluştur (MAX_COUNT, sadece bu mesaj bu etkinliktir diye işaret)
+        await pool.query(
+            `INSERT INTO etkinlik_katilim (message_id, user_id)
+             VALUES ($1, $2)`,
+            [sentMessage.id, "MAX_COUNT"]
+        ).catch(console.error);
+
+        const collector = sentMessage.createReactionCollector({ dispose: true });
+
+        // --- KATILMA ---
+        collector.on("collect", async (reaction, user) => {
+            if (reaction.emoji.name !== "✅" || user.bot) return;
+
+            try {
+                const countCheck = await pool.query(
+                    `SELECT * FROM etkinlik_katilim WHERE message_id = $1`,
+                    [sentMessage.id]
+                );
+                const actualCount = countCheck.rowCount - 1; // MAX_COUNT hariç
+
+                if (actualCount >= maxParticipants) {
+                    // Etkinlik dolu
+                    reaction.users.remove(user.id).catch(() => {});
+                    return user.send("❌ Bu etkinlik dolu!").catch(() => {});
+                }
+
+                const exist = await pool.query(
+                    `SELECT * FROM etkinlik_katilim 
+                     WHERE message_id = $1 AND user_id = $2`,
+                    [sentMessage.id, user.id]
+                );
+
+                if (exist.rowCount === 0) {
+                    await pool.query(
+                        `INSERT INTO etkinlik_katilim (message_id, user_id)
+                         VALUES ($1, $2)`,
+                        [sentMessage.id, user.id]
+                    );
+                }
+
+                await updateEventEmbed(sentMessage);
+
+            } catch (err) {
+                console.error("Katılım hatası:", err);
+            }
+        });
+
+        // --- AYRILMA (Tepkiyi kaldırırsa) ---
+        collector.on("remove", async (reaction, user) => {
+            if (reaction.emoji.name !== "✅" || user.bot) return;
+
+            try {
+                await pool.query(
+                    `DELETE FROM etkinlik_katilim 
+                     WHERE message_id = $1 AND user_id = $2`,
+                    [sentMessage.id, user.id]
+                );
+
+                await updateEventEmbed(sentMessage);
+
+            } catch (err) {
+                console.error("Çıkarma hatası:", err);
+            }
+        });
+
+        return;
+    }
+
+    // --- .etkinlik-bitir ---
+    if (command === '.etkinlik-bitir') {
+        if (!isOwner) return message.reply("Bu komutu kullanamazsın.");
+
+        const msgId = args[1];
+        if (!msgId) return message.reply("Kullanım: `.etkinlik-bitir [mesajID]`");
+
+        try {
+            await pool.query(
+                `DELETE FROM etkinlik_katilim WHERE message_id = $1`,
+                [msgId]
+            );
+
+            const channel = message.channel;
+            const targetMsg = await channel.messages.fetch(msgId);
+
+            const endedEmbed = EmbedBuilder.from(targetMsg.embeds[0])
+                .setTitle("❌ Etkinlik Sona Erdi")
+                .setDescription("Bu etkinlik artık kapatılmıştır.")
+                .setFields([]);
+
+            await targetMsg.edit({ embeds: [endedEmbed] });
+            await targetMsg.reactions.removeAll().catch(console.error);
+
+            return message.reply("Etkinlik başarıyla sonlandırıldı!");
+        } catch (err) {
+            console.error(err);
+            return message.reply("Hata: Böyle bir etkinlik bulunamadı.");
+        }
+    }
+
+    // --- .etkinlik-liste ---
+    if (command === '.etkinlik-liste') {
+        if (!isOwner) return message.reply("Bu komutu kullanamazsın.");
+
+        const data = await pool.query(
+            `SELECT DISTINCT message_id 
+             FROM etkinlik_katilim 
+             WHERE user_id = 'MAX_COUNT'`
+        );
+
+        if (data.rowCount === 0)
+            return message.reply("Aktif bir etkinlik yok.");
+
+        const list = data.rows
+            .map(r => `• Mesaj ID: **${r.message_id}**`)
+            .join("\n");
+
+        const embed = new EmbedBuilder()
+            .setColor(0x000000)
+            .setTitle("📋 Açık Etkinlikler")
+            .setDescription(list);
+
+        return message.reply({ embeds: [embed] });
+    }
+
+    // --- .etkinlik-sil ---
+    if (command === '.etkinlik-sil') {
+        if (!isOwner) return message.reply("Bu komutu kullanamazsın.");
+
+        const msgId = args[1];
+        if (!msgId) return message.reply("Kullanım: `.etkinlik-sil [mesajID]`");
+
+        await pool.query(
+            `DELETE FROM etkinlik_katilim WHERE message_id = $1`,
+            [msgId]
+        );
+
+        return message.reply("SQL’den etkinlik verileri temizlendi.");
+    }
+
+    // --- .etekle ---
+    if (command === '.etekle') {
+        if (!isOwner) return message.reply("Bu komutu kullanamazsın.");
+
+        const msgId = args[1];
+        const user = message.mentions.users.first();
+
+        if (!msgId || !user)
+            return message.reply("Kullanım: `.etekle [mesajID] @kullanıcı`");
+
+        const exists = await pool.query(
+            `SELECT * FROM etkinlik_katilim WHERE message_id = $1 AND user_id = $2`,
+            [msgId, user.id]
+        );
+
+        if (exists.rowCount > 0)
+            return message.reply("Bu kullanıcı zaten etkinlikte.");
+
+        await pool.query(
+            `INSERT INTO etkinlik_katilim (message_id, user_id) VALUES ($1, $2)`,
+            [msgId, user.id]
+        );
+
+        message.reply(`<@${user.id}> etkinliğe eklendi.`);
+
+        let targetMsg;
+        try {
+            targetMsg = await message.channel.messages.fetch(msgId);
+        } catch (err) {
+            return message.reply("Etkinlik mesajı bu kanalda bulunamadı. Mesaj farklı kanalda olabilir.");
+        }
+
+        await updateEventEmbed(targetMsg);
+        return;
+    }
+
+    // --- .etçıkar ---
+    if (command === '.etçıkar') {
+        if (!isOwner) return message.reply("Bu komutu sadece bot sahibi kullanabilir.");
+        const member = message.mentions.users.first();
+        if (!member) return message.reply("Lütfen çıkarılacak kullanıcıyı etiketleyin.");
+
+        const result = await pool.query(
+            "SELECT message_id FROM etkinlik_katilim WHERE user_id = 'MAX_COUNT' LIMIT 1"
+        );
+
+        if (result.rowCount === 0) {
+            return message.reply("Aktif etkinlik bulunamadı!");
+        }
+
+        const etkinlikMessageId = result.rows[0].message_id;
+
+        let eventMessage;
+        try {
+            eventMessage = await message.channel.messages.fetch(etkinlikMessageId);
+        } catch (e) {
+            return message.reply("Etkinlik mesajı bulunamadı (muhtemelen farklı kanalda veya silinmiş).");
+        }
+
+        await pool.query(
+            "DELETE FROM etkinlik_katilim WHERE user_id = $1 AND message_id = $2",
+            [member.id, etkinlikMessageId]
+        );
+
+        await updateEventEmbed(eventMessage);
+
+        return message.reply(`<@${member.id}> etkinlikten çıkarıldı.`);
+    }
+
+
 // =======================================================
 // 🔑 GİZLİ AYARLAR VE YAPILANDIRMALAR
 // =======================================================
@@ -1371,11 +1607,38 @@ async function updateEventEmbed(message) {
 
     await message.edit({ embeds: [updatedEmbed] }).catch(() => {});
 }
+async function updateEventEmbed(message) {
+    if (!message) return;
+
+    // SQL’den katılımcıları çek
+    const participants = await pool.query(
+        `SELECT user_id FROM etkinlik_katilim 
+         WHERE message_id = $1 AND user_id != 'MAX_COUNT'`,
+        [message.id]
+    );
+
+    // MAX kişi sayısını embed footer’dan oku
+    const oldEmbed = message.embeds[0];
+    const footerText = oldEmbed?.footer?.text || "Maksimum Katılımcı: 20";
+    const maxCount = parseInt(footerText.split(":").pop().trim()) || 20;
+
+    const listText =
+        participants.rowCount > 0
+            ? participants.rows.map(r => `<@${r.user_id}>`).join("\n")
+            : "(Henüz kimse katılmadı)";
+
+    const newEmbed = new EmbedBuilder(oldEmbed)
+        .setFields({
+            name: `Katılımcılar (${participants.rowCount}/${maxCount})`,
+            value: listText
+        })
+        .setFooter({ text: `Maksimum Katılımcı: ${maxCount}` });
+
+    await message.edit({ embeds: [newEmbed] }).catch(console.error);
+}
 
 client.login(BOT_TOKEN);
 
-
-client.login(BOT_TOKEN);
 
 
 
