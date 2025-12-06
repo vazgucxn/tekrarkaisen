@@ -99,7 +99,7 @@ client.on("messageCreate", async (message) => {
             const channel = message.mentions.channels.first();
 
             if (!channel || channel.type !== ChannelType.GuildText) {
-                return message.reply("❌ Kullanım: `.otoban #kanal kişi_sayısı açıklama`");
+                return message.reply("❌ Kullanım bu aq: `.otoban #kanal kişi_sayısı açıklama`");
             }
 
             // mention'ı args listesinden çıkar
@@ -109,26 +109,26 @@ client.on("messageCreate", async (message) => {
             const max = Number(maxStr);
             if (!maxStr || isNaN(max) || max < 1) {
                 return message.reply(
-                    "❌ Kişi sayısını doğru gi. Örn: `.otoban #kanal 20 redzone etkinliği`"
+                    "❌ Kişi sayısını doğru giriniz aq. Örn: `.otoban #kanal 20 redzone etkinliği`"
                 );
             }
 
             const title = args.join(" ");
             if (!title) {
-                return message.reply("❌ Bir açıklama / etkinlik adı girmen gerekiyor.");
+                return message.reply("açıklama ya etkinlik adı yarram");
             }
 
             // Katılım açıkken EMBED
             const embed = new EmbedBuilder()
-                .setTitle("🎟️ OTOBAN / ETKİNLİK")
+                .setTitle("💎 OTOBAN / ETKİNLİK")
                 .setDescription(title)
                 .addFields(
                     { name: "Kişi Sınırı", value: `${max}`, inline: true },
                     { name: "Durum", value: "Kayıtlar açık.", inline: true },
                     { name: "Liste", value: "Henüz kimse katılmadı." },
                 )
-                .setColor(0x00ffff) // turkuaz
-                .setFooter({ text: "Kaisen OtoBan Sistemi" })
+                .setColor(0x000000) // siyah
+                .setFooter({ text: "Kaisen Otoban Sistemi" })
                 .setTimestamp();
 
             const msg = await channel.send({ embeds: [embed] });
@@ -143,7 +143,7 @@ client.on("messageCreate", async (message) => {
                 ownerId: message.author.id,
             });
 
-            return message.reply(`✅ Oto-ban mesajı ${channel} kanalına gönderildi.`);
+            return message.reply(`✅ Otoban mesajı ${channel} kanalına gönderildi.`);
         }
 
         // ------------------------------------------------
@@ -170,7 +170,7 @@ client.on("messageCreate", async (message) => {
             }
 
             await message.reply(
-                `⏳ ${role} rolündeki kullanıcılara DM gönderiliyor, biraz sürebilir...`
+                `⏳ ${role} roldeki dümbükleri çağrıyom dur pampa`
             );
 
             // GUILD_MEMBERS intent'i açık olmalı
@@ -223,11 +223,11 @@ client.on("messageCreate", async (message) => {
             }
 
             const embed = new EmbedBuilder()
-                .setTitle("📨 Kaisen Başvuru Sistemi")
+                .setTitle("Kaisen Ekip Başvuru")
                 .setDescription(
-                    "Sunucu ekibine / özel rollere başvurmak için aşağıdaki butona tıkla.\n" +
+                    "Ekip başvurusu için aşağıdan tike basın.\n" +
                     "Senin için özel bir kanal açılacak, soruları orada cevaplayacaksın.\n\n" +
-                    "❗ Spam başvuru açmak yasaktır."
+                    "❗ Pedsen açma kanka."
                 )
                 .setColor(0x5865f2);
 
@@ -318,8 +318,8 @@ client.on("interactionCreate", async (interaction) => {
                             "Merhaba, başvurun için teşekkürler.\n\n" +
                             "Lütfen aşağıdaki örneğe göre cevap ver:\n" +
                             "• Yaşın:\n" +
-                            "• Deneyimin / önceki görevlerin:\n" +
-                            "• Neden seni seçelim?:\n\n" +
+                            "• Önceden oynadığın ekipler. :\n" +
+                            "• Kill pov en az 5 tane. :\n\n" +
                             "İşin bittiğinde aşağıdaki butondan başvuruyu kapatabilirsin."
                         )
                         .setColor(0x2f3136)
@@ -505,15 +505,15 @@ async function updateOtobanMessage(message, data) {
     // Katılım açıkken -> EMBED
     if (!data.closed) {
         const embed = new EmbedBuilder()
-            .setTitle("🎟️ OTOBAN / ETKİNLİK")
+            .setTitle("💎 OTOBAN / ETKİNLİK")
             .setDescription(data.title)
             .addFields(
                 { name: "Kişi Sınırı", value: `${data.max}`, inline: true },
                 { name: "Durum", value: "Kayıtlar açık.", inline: true },
                 { name: "Liste", value: embedListText },
             )
-            .setColor(0x00ffff)
-            .setFooter({ text: "Kaisen OtoBan Sistemi" })
+            .setColor(0x000000)
+            .setFooter({ text: "Kaisen Otoban Sistemi" })
             .setTimestamp();
 
         return message.edit({ content: null, embeds: [embed] }).catch(() => {});
@@ -522,7 +522,7 @@ async function updateOtobanMessage(message, data) {
     // Kapandıysa -> DÜZ YAZI
     const finalText =
         `${data.title} için katılımlar sona erdi.\n` +
-        `Katılımcılar aşağıdaki listede gösteriliyor...\n\n` +
+        `Kadro aşağıdaki listede gösteriliyor...\n\n` +
         finalListText;
 
     return message.edit({ embeds: [], content: finalText }).catch(() => {});
@@ -530,4 +530,5 @@ async function updateOtobanMessage(message, data) {
 
 // ------------- BOTU BAŞLAT -------------
 client.login(TOKEN);
+
 
