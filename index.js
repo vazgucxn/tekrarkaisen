@@ -22,12 +22,37 @@ app.listen(process.env.PORT || 3000, () => {
 
 // ------------- ENV DEĞİŞKENLERİ -------------
 const TOKEN = process.env.TOKEN;         // BOT TOKEN (Render env)
-const CLIENT_ID = process.env.CLIENT_ID; // APPLICATION ID (Render env)
-const GUILD_ID = process.env.GUILD_ID;   // KAISEN SUNUCU ID (Render env)
+const CLIENT_ID = process.env.CLIENT_ID; // APPLICATION ID
+const GUILD_ID = process.env.GUILD_ID;   // KAISEN SUNUCU ID
 
-if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
-    console.log('⚠ TOKEN, CLIENT_ID veya GUILD_ID environment değişkenleri eksik!');
+console.log('ENV KONTROL:',
+    'TOKEN uzunluk =', TOKEN ? TOKEN.length : 0,
+    '| CLIENT_ID =', CLIENT_ID,
+    '| GUILD_ID =', GUILD_ID
+);
+
+// Eğer TOKEN yoksa veya çok kısa ise, Discord.js'e gitmeden çıkalım
+if (!TOKEN || typeof TOKEN !== 'string' || TOKEN.length < 10) {
+    console.error('❌ HATA: TOKEN environment değişkeni yok veya çok kısa / geçersiz.');
+    console.error('Render > Environment sekmesinde KEY = TOKEN, VALUE = BOT TOKEN olduğuna emin ol.');
+    process.exit(1);
 }
+
+if (!CLIENT_ID || !GUILD_ID) {
+    console.warn('⚠ Uyarı: CLIENT_ID veya GUILD_ID ayarlı değil gibi görünüyor.');
+}
+
+// ------------- CLIENT -------------
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMessageReactions,
+    ],
+    partials: [Partials.Message, Partials.Channel, Partials.Reaction],
+});
+
 
 // ------------- CLIENT -------------
 const client = new Client({
@@ -580,4 +605,7 @@ client.on('messageReactionRemove', async (reaction, user) => {
 });
 
 // ------------- BOTU ÇALIŞTIR -------------
+
 client.login(TOKEN);
+
+
