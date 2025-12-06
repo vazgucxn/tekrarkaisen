@@ -25,7 +25,7 @@ app.listen(process.env.PORT || 3000, () => {
 
 // ------------- ENV DEĞİŞKENLERİ -------------
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
-const GUILD_ID = process.env.GUILD_ID || null; // istersen tek sunucuya kilitle
+const GUILD_ID = process.env.GUILD_ID || null;
 
 console.log(
     "ENV KONTROL:",
@@ -261,7 +261,6 @@ client.on("interactionCreate", async (interaction) => {
         if (!interaction.isButton()) return;
         if (GUILD_ID && interaction.guildId !== GUILD_ID) return;
 
-        // Her butonda önce deferReply -> "uygulama yanıt vermedi" çıkmaz
         await interaction.deferReply({ ephemeral: true });
 
         // -------- Ticket oluştur --------
