@@ -10,12 +10,10 @@ const {
     PermissionsBitField,
     ChannelType,
     ActivityType,
-    Routes,
 } = require('discord.js');
-const { REST } = require('@discordjs/rest');
 const express = require('express');
 
-// ------------- Render için mini web server (zorunluya yakın) -------------
+// ------------- Render için mini web server -------------
 const app = express();
 app.get('/', (_req, res) => res.send('Kaisen bot aktif'));
 app.listen(process.env.PORT || 3000, () => {
@@ -23,14 +21,13 @@ app.listen(process.env.PORT || 3000, () => {
 });
 
 // ------------- ENV DEĞİŞKENLERİ -------------
-const TOKEN = process.env.TOKEN;       // BOT TOKEN
-const CLIENT_ID = process.env.CLIENT_ID; // APPLICATION ID
-const GUILD_ID = process.env.GUILD_ID;   // KAISEN SUNUCU ID
+const TOKEN = process.env.TOKEN;         // BOT TOKEN (Render env)
+const CLIENT_ID = process.env.CLIENT_ID; // APPLICATION ID (Render env)
+const GUILD_ID = process.env.GUILD_ID;   // KAISEN SUNUCU ID (Render env)
 
-if (!MTQ0NjE4NDEyNzA5ODUyMzcxMA.GGXK5c.Load4Vf9A3x1tRcvXjnfUyAtVQUM0uFqFWmn_0 || !1446184127098523710 || !1414937526241591298) {
-    console.log('Lütfen TOKEN, CLIENT_ID ve GUILD_ID environment değişkenlerini ayarla!');
+if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
+    console.log('⚠ TOKEN, CLIENT_ID veya GUILD_ID environment değişkenleri eksik!');
 }
-
 
 // ------------- CLIENT -------------
 const client = new Client({
@@ -119,7 +116,7 @@ const commands = [
     },
 ];
 
-// ------------- OTOBAN / ETKİNLİK VERİLERİ (RAM İÇİ) -------------
+// ------------- OTOBAN / ETKİNLİK VERİLERİ -------------
 /*
     Map: key = messageId
     value = {
@@ -135,30 +132,27 @@ const otobanEvents = new Map();
 
 // ------------- READY -------------
 client.once('ready', async () => {
-    console.log(`Bot giriş yaptı: ${client.user.tag}`);
+    console.log(`✅ Bot giriş yaptı: ${client.user.tag}`);
 
     // Yayın yapan status
     client.user.setPresence({
         activities: [
             {
                 name: 'Kaisen Sunucusu',
-                type: ActivityType.Streaming, // yayın yapıyor
-                url: 'https://twitch.tv/discord', // herhangi bir geçerli url
+                type: ActivityType.Streaming,
+                url: 'https://twitch.tv/discord',
             },
         ],
         status: 'online',
     });
 
-    // Slash komutlarını yalnızca KAISEN sunucusuna yükle
-    const rest = new REST({ version: '10' }).setToken(TOKEN);
+    // Slash komutlarını SADECE Kaisen sunucusuna yükle
     try {
-        await rest.put(
-            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-            { body: commands },
-        );
-        console.log('Slash komutları Kaisen sunucusuna yüklendi.');
+        const guild = await client.guilds.fetch(GUILD_ID);
+        await guild.commands.set(commands);
+        console.log('✅ Slash komutları Kaisen sunucusuna yüklendi.');
     } catch (err) {
-        console.error('Slash komut yüklenirken hata:', err);
+        console.error('Slash komutları yüklenirken hata:', err);
     }
 });
 
@@ -193,20 +187,9 @@ client.on('interactionCreate', async (interaction) => {
                     .setTitle('🎟️ OTOBAN / ETKİNLİK KAYIT')
                     .setDescription(desc)
                     .addFields(
-                        {
-                            name: `Kişi Sınırı`,
-                            value: `${max}`,
-                            inline: true,
-                        },
-                        {
-                            name: 'Durum',
-                            value: 'Kayıtlar açık.',
-                            inline: true,
-                        },
-                        {
-                            name: 'Liste',
-                            value: 'Henüz kimse katılmadı.',
-                        },
+                        { name: 'Kişi Sınırı', value: `${max}`, inline: true },
+                        { name: 'Durum', value: 'Kayıtlar açık.', inline: true },
+                        { name: 'Liste', value: 'Henüz kimse katılmadı.' },
                     )
                     .setColor('Aqua')
                     .setFooter({ text: `Oluşturan: ${interaction.user.tag}` })
@@ -234,7 +217,7 @@ client.on('interactionCreate', async (interaction) => {
             if (commandName === 'ban') {
                 if (!interaction.member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
                     return interaction.reply({
-                        content: 'Bu komutu kullanmak için **Üyeleri Yasakla (BanMembers)** yetkisine sahip olmalısın.',
+                        content: 'Bu komutu kullanmak için **Üyeleri Yasakla** yetkisine sahip olmalısın.',
                         ephemeral: true,
                     });
                 }
@@ -282,7 +265,7 @@ client.on('interactionCreate', async (interaction) => {
             if (commandName === 'unban') {
                 if (!interaction.member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
                     return interaction.reply({
-                        content: 'Bu komutu kullanmak için **Üyeleri Yasakla (BanMembers)** yetkisine sahip olmalısın.',
+                        content: 'Bu komutu kullanmak için **Üyeleri Yasakla** yetkisine sahip olmalısın.',
                         ephemeral: true,
                     });
                 }
@@ -353,10 +336,13 @@ client.on('interactionCreate', async (interaction) => {
                     });
                 }
 
-                const channelName = `ticket-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9\-]/g, '').slice(0, 20);
+                const baseName = `ticket-${interaction.user.username}`
+                    .toLowerCase()
+                    .replace(/[^a-z0-9\-]/g, '')
+                    .slice(0, 20);
 
                 const ticketChannel = await guild.channels.create({
-                    name: `${channelName}-${interaction.user.id.slice(-4)}`,
+                    name: `${baseName}-${interaction.user.id.slice(-4)}`,
                     type: ChannelType.GuildText,
                     parent: interaction.channel.parentId ?? null,
                     permissionOverwrites: [
@@ -420,7 +406,6 @@ client.on('interactionCreate', async (interaction) => {
                 const [, staffRoleId, ownerId] = interaction.customId.split(':');
                 const channel = interaction.channel;
 
-                // Kapatma yetkisi: ticket sahibi veya staff/admin
                 const isOwner = interaction.user.id === ownerId;
                 const isStaff = interaction.member.roles.cache.has(staffRoleId) ||
                     interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
@@ -432,12 +417,13 @@ client.on('interactionCreate', async (interaction) => {
                     });
                 }
 
-                // Kanala sadece admin/staff erişsin, kullanıcı erişemesin
+                // Sahip artık göremesin
                 await channel.permissionOverwrites.edit(ownerId, {
                     ViewChannel: false,
                     SendMessages: false,
                 }).catch(() => {});
 
+                // Staff/admin görmeye devam etsin
                 await channel.permissionOverwrites.edit(staffRoleId, {
                     ViewChannel: true,
                     SendMessages: true,
@@ -454,8 +440,10 @@ client.on('interactionCreate', async (interaction) => {
                 let components = [];
                 if (interaction.message.components?.length) {
                     const row = ActionRowBuilder.from(interaction.message.components[0]);
-                    const btn = ButtonBuilder.from(row.components[0]).setDisabled(true);
-                    components = [new ActionRowBuilder().addComponents(btn)];
+                    if (row.components[0]) {
+                        const btn = ButtonBuilder.from(row.components[0]).setDisabled(true);
+                        components = [new ActionRowBuilder().addComponents(btn)];
+                    }
                 }
 
                 const closedEmbed = new EmbedBuilder()
@@ -475,36 +463,31 @@ client.on('interactionCreate', async (interaction) => {
         }
     } catch (err) {
         console.error('interactionCreate hatası:', err);
-        if (interaction.isRepliable && !interaction.replied) {
-            interaction.reply({ content: 'Bir hata oluştu.', ephemeral: true }).catch(() => {});
-        }
+        try {
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: 'Bir hata oluştu.', ephemeral: true });
+            }
+        } catch (_) {}
     }
 });
 
-// ------------- REACTION HANDLER (OTOBAN) -------------
+// ------------- OTOBAN YARDIMCI FONKSİYON -------------
 async function handleOtobanUpdate(message) {
     const data = otobanEvents.get(message.id);
     if (!data) return;
 
-    const guild = message.guild;
     const participantsArray = Array.from(data.participants);
 
     const listText =
         participantsArray.length === 0
             ? 'Henüz kimse katılmadı.'
-            : participantsArray
-                  .map((id, index) => `${index + 1}. <@${id}>`)
-                  .join('\n');
+            : participantsArray.map((id, index) => `${index + 1}. <@${id}>`).join('\n');
 
     const embed = new EmbedBuilder()
         .setTitle(data.closed ? '🎟️ OTOBAN / ETKİNLİK KAYIT (KAPANDI)' : '🎟️ OTOBAN / ETKİNLİK KAYIT')
         .setDescription(data.description)
         .addFields(
-            {
-                name: 'Kişi Sınırı',
-                value: `${data.max}`,
-                inline: true,
-            },
+            { name: 'Kişi Sınırı', value: `${data.max}`, inline: true },
             {
                 name: 'Durum',
                 value: data.closed
@@ -512,10 +495,7 @@ async function handleOtobanUpdate(message) {
                     : 'Kayıtlar açık. ✅ emojisine basarak katılabilirsin.',
                 inline: true,
             },
-            {
-                name: 'Liste',
-                value: listText,
-            },
+            { name: 'Liste', value: listText },
         )
         .setColor(data.closed ? 'Red' : 'Aqua')
         .setFooter({ text: 'Kaisen OtoBan Sistemi' })
@@ -524,6 +504,7 @@ async function handleOtobanUpdate(message) {
     await message.edit({ embeds: [embed] }).catch(() => {});
 }
 
+// ------------- REACTION HANDLER (OTOBAN) -------------
 client.on('messageReactionAdd', async (reaction, user) => {
     try {
         if (user.bot) return;
@@ -539,41 +520,34 @@ client.on('messageReactionAdd', async (reaction, user) => {
         if (!data) return;
         if (reaction.emoji.name !== '✅') return;
 
-        // Etkinlik kapanmışsa yeni kişi alma
+        // Kayıtlar kapalıysa yeni kişi alma
         if (data.closed) {
-            // Kullanıcının reaksiyonunu geri al (kayıt kapalı)
             await reaction.users.remove(user.id).catch(() => {});
             return;
         }
 
-        if (data.participants.has(user.id)) {
-            // Zaten listede ise bir şey yapma
-            return;
-        }
+        if (data.participants.has(user.id)) return;
 
         if (data.participants.size >= data.max) {
-            // Limit doluysa reaksiyonu geri al
             await reaction.users.remove(user.id).catch(() => {});
             return;
         }
 
         data.participants.add(user.id);
 
+        const msg = await reaction.message.fetch().catch(() => null);
+        if (!msg) return;
+
         // Limit dolduysa kayıtları kapat ve tiki kaldır
         if (data.participants.size >= data.max) {
             data.closed = true;
-            const msg = await reaction.message.fetch().catch(() => null);
-            if (msg) {
-                const r = msg.reactions.resolve('✅');
-                if (r) {
-                    await r.remove().catch(() => {});
-                }
-                await handleOtobanUpdate(msg);
+            const r = msg.reactions.resolve('✅');
+            if (r) {
+                await r.remove().catch(() => {});
             }
-        } else {
-            const msg = await reaction.message.fetch().catch(() => null);
-            if (msg) await handleOtobanUpdate(msg);
         }
+
+        await handleOtobanUpdate(msg);
     } catch (err) {
         console.error('messageReactionAdd hatası:', err);
     }
