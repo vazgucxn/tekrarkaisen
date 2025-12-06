@@ -9,7 +9,7 @@ const { Pool } = pg;
 const axios = require('axios'); 
 
 // =======================================================
-// 🔑 GİZLİ AYARLAR 
+// 🔑 GİZLİ A
 // =======================================================
 
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN; 
@@ -936,4 +936,5 @@ client.on('messageCreate', async message => {
 // ... (Geriye kalan tüm helper fonksiyonlar, interactionCreate ve log eventleri buraya dahil edilmiştir) ...
 
 client.login(BOT_TOKEN);
+
 
