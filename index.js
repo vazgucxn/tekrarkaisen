@@ -25,7 +25,7 @@ app.listen(process.env.PORT || 3000, () => {
 
 // ------------- ENV DEĞİŞKENLERİ -------------
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
-const GUILD_ID = process.env.GUILD_ID || null;
+const GUILD_ID = process.env.GUILD_ID || null; // istersen tek sunucuya kilitle
 
 console.log(
     "ENV KONTROL:",
@@ -45,7 +45,7 @@ const client = new Client({
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.MessageContent, // prefix komutlar için
+        GatewayIntentBits.MessageContent, // prefix komut için
     ],
     partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
@@ -59,7 +59,7 @@ value = {
     participants: Set<userId>,
     closed: boolean,
     channelId: string,
-    ownerId: string
+    ownerId: string,
 }
 */
 const otobanEvents = new Map();
@@ -118,13 +118,20 @@ client.on("messageCreate", async (message) => {
                 return message.reply("❌ Bir açıklama / etkinlik adı girmen gerekiyor.");
             }
 
-            const content =
-                `${title} için katılımlar başlamıştır.\n` +
-                `Katılmak için bu mesaja ✅ ile tepki ver.\n` +
-                `Maksimum: **${max}** kişi.\n\n` +
-                `Katılımcılar:\nHenüz kimse katılmadı.`;
+            // Katılım açıkken EMBED
+            const embed = new EmbedBuilder()
+                .setTitle("🎟️ OTOBAN / ETKİNLİK")
+                .setDescription(title)
+                .addFields(
+                    { name: "Kişi Sınırı", value: `${max}`, inline: true },
+                    { name: "Durum", value: "Kayıtlar açık.", inline: true },
+                    { name: "Liste", value: "Henüz kimse katılmadı." },
+                )
+                .setColor("Aqua")
+                .setFooter({ text: "Kaisen OtoBan Sistemi" })
+                .setTimestamp();
 
-            const msg = await channel.send({ content });
+            const msg = await channel.send({ embeds: [embed] });
             await msg.react("✅");
 
             otobanEvents.set(msg.id, {
@@ -483,32 +490,41 @@ client.on("messageReactionRemove", async (reaction, user) => {
 // ---------------- OTOBAN MESAJ GÜNCELLEYİCİ ----------------
 async function updateOtobanMessage(message, data) {
     const arr = Array.from(data.participants);
-    let listText;
 
-    if (arr.length === 0) {
-        listText = "Katılımcı yok.";
-    } else {
-        listText = arr
-            .map((id, index) => `${index + 1}- <@${id}> ( ${id} )`)
-            .join("\n");
+    const embedListText =
+        arr.length === 0
+            ? "Henüz kimse katılmadı."
+            : arr.map((id, index) => `${index + 1}. <@${id}>`).join("\n");
+
+    const finalListText =
+        arr.length === 0
+            ? "Katılımcı yok."
+            : arr.map((id, index) => `${index + 1}- <@${id}> ( ${id} )`).join("\n");
+
+    // Katılım açıkken -> EMBED
+    if (!data.closed) {
+        const embed = new EmbedBuilder()
+            .setTitle("🎟️ OTOBAN / ETKİNLİK")
+            .setDescription(data.title)
+            .addFields(
+                { name: "Kişi Sınırı", value: `${data.max}`, inline: true },
+                { name: "Durum", value: "Kayıtlar açık.", inline: true },
+                { name: "Liste", value: embedListText },
+            )
+            .setColor("Aqua")
+            .setFooter({ text: "Kaisen OtoBan Sistemi" })
+            .setTimestamp();
+
+        return message.edit({ content: null, embeds: [embed] }).catch(() => {});
     }
 
-    let content;
-    if (data.closed) {
-        // SENİN İSTEDİĞİN FORM: "katılımlar sona erdi. Katılımcılar aşağıdaki listede gösteriliyor..."
-        content =
-            `${data.title} için katılımlar sona erdi.\n` +
-            `Katılımcılar aşağıdaki listede gösteriliyor...\n\n` +
-            listText;
-    } else {
-        content =
-            `${data.title} için katılımlar devam ediyor.\n` +
-            `Maksimum: **${data.max}** kişi. Katılmak için ✅ tepki ver.\n\n` +
-            `Katılımcılar:\n` +
-            listText;
-    }
+    // Kapandıysa -> DÜZ YAZI
+    const finalText =
+        `${data.title} için katılımlar sona erdi.\n` +
+        `Katılımcılar aşağıdaki listede gösteriliyor...\n\n` +
+        finalListText;
 
-    await message.edit({ content }).catch(() => {});
+    return message.edit({ embeds: [], content: finalText }).catch(() => {});
 }
 
 // ------------- BOTU BAŞLAT -------------
