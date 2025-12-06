@@ -16,14 +16,14 @@ const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN;
 const POSTGRES_URL = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 
 // Lütfen kendi bot sahibi ID'lerinizi buraya ekleyin
-let OWNER_IDS = ['YOUR_OWNER_ID_1', 'YOUR_OWNER_ID_2']; 
+let OWNER_IDS = ['827905938923978823', 'YOUR_OWNER_ID_2']; 
 
 // 🚨 TICKET SİSTEMİ KATEGORİ ID'Sİ (ZORUNLU)
-const TICKET_CATEGORY_ID = "BURAYA_TICKET_KATEGORI_IDNIZI_YAZIN"; 
+const TICKET_CATEGORY_ID = "1414937528682807400"; 
 
 // Guard Ayarları
 const GUARD_SETTINGS = {
-    OWN_ID: 'YOUR_BOT_ID_HERE', 
+    OWN_ID: '1446184127098523710', 
     KICK_LIMIT: 3, 
     BAN_LIMIT: 3, 
     TIMEFRAME: 10000, // 10 saniye (miliseconds)
@@ -936,3 +936,4 @@ client.on('messageCreate', async message => {
 // ... (Geriye kalan tüm helper fonksiyonlar, interactionCreate ve log eventleri buraya dahil edilmiştir) ...
 
 client.login(BOT_TOKEN);
+
