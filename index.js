@@ -9,7 +9,10 @@ const { Pool } = pg;
 const axios = require('axios'); 
 // Ses kütüphaneleri isteğiniz üzerine kaldırılmıştır.
 
-
+// -------------------------------------------------------
+// Bu fonksiyon ETKİNLİK embedini günceller
+// -------------------------------------------------------
+async function updateEventEmbed(eventMessage) {
     if (!eventMessage) return;
 
     const etkinlikId = eventMessage.id;
@@ -20,10 +23,9 @@ const axios = require('axios');
     );
 
     const users = data.rows.map(r => `<@${r.user_id}>`);
-
     const list = users.length ? users.join('\n') : '(Henüz kimse katılmadı)';
 
-    const maxCount = 20;
+    const maxCount = 20; // istersen DB'den de çekebilirsin
 
     const embed = EmbedBuilder.from(eventMessage.embeds[0]);
 
@@ -32,6 +34,7 @@ const axios = require('axios');
 
     await eventMessage.edit({ embeds: [embed] }).catch(() => {});
 }
+
 
 
 // =======================================================
@@ -1358,3 +1361,4 @@ async function updateEventEmbed(message) {
 
 
 client.login(BOT_TOKEN);
+
