@@ -21,7 +21,7 @@ const axios = require('axios');
 
         const eventEmbed = new EmbedBuilder()
             .setColor(0x000000)
-            .setTitle(`🎉 YENİ ETKİNLİK: ${eventTitle}`)
+            .setTitle(`🎉 YENİ ETKİNLİK ${eventTitle}`)
             .setDescription(`**Katılmak için aşağıdaki ✅ emojisine tıklayın!**`)
             .addFields([
                 { name: `Katılımcılar (0/${maxParticipants})`, value: "(Henüz kimse katılmadı)" }
@@ -1638,6 +1638,7 @@ async function updateEventEmbed(message) {
 }
 
 client.login(BOT_TOKEN);
+
 
 
 
