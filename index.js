@@ -191,6 +191,20 @@ client.on("messageCreate", async (message) => {
         const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
         const cmd = args.shift()?.toLowerCase();
 
+        // ===================== BIO KONTROL KANALINI AYARLAMA =====================
+if (cmd === "bio-kontrol") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Bu komut için yetkin yok.");
+
+    const ch = message.mentions.channels.first();
+    if (!ch) return message.reply("Kullanım: `.bio-kontrol #kanal`");
+
+    bioKontrolChannel = ch.id;
+
+    return message.reply(`✅ Bio kontrol uyarı kanalı ayarlandı: ${ch}`);
+}
+
+
         // ----------------- .sil -----------------
         if (cmd === "sil") {
             if (!hasBotPermission(message.member))
@@ -230,7 +244,7 @@ client.on("messageCreate", async (message) => {
         }
 
         // ----------------- .yardım -----------------
-       if (cmd === "yardım" || cmd === "yardim") {
+      if (cmd === "yardım" || cmd === "yardim") {
     const embed = new EmbedBuilder()
         .setTitle("🛠 Kaisen Bot Yardım Menüsü")
         .setColor("#000000")
@@ -249,31 +263,25 @@ client.on("messageCreate", async (message) => {
                 name: "🧹 Moderasyon",
                 value:
                     "`" +
-                    ".sil <miktar>  → Mesaj siler\n" +
-                    ".nuke          → Kanalı sıfırlar" +
+                    ".sil <miktar> → Mesaj siler\n" +
+                    ".nuke → Kanalı yeniden oluşturur" +
                     "`"
             },
             {
                 name: "💌 DM Sistemi",
-                value:
-                    "`" +
-                    ".dm @rol mesaj → O roldeki herkese DM atar" +
-                    "`"
+                value: "`" + ".dm @rol mesaj" + "`"
             },
             {
                 name: "📨 Başvuru Sistemi",
-                value:
-                    "`" +
-                    ".basvurupanel @yetkili → Başvuru paneli oluşturur" +
-                    "`"
+                value: "`" + ".basvurupanel @YetkiliRol" + "`"
             },
             {
-                name: "🚫 Forceban Sistemi",
+                name: "🚫 ForceBan Sistemi",
                 value:
                     "`" +
                     ".forceban @kullanıcı/id sebep\n" +
                     ".unforceban @kullanıcı/id" +
-                    "`\n(Sadece <@" + FORCE_BAN_OWNER + "> kullanabilir)"
+                    "`\n(sadece <@" + FORCE_BAN_OWNER + "> kullanabilir)"
             },
             {
                 name: "🛡 Yetki Sistemi",
@@ -285,13 +293,11 @@ client.on("messageCreate", async (message) => {
                     "`"
             },
             {
-                name: "🛑 Guard Sistemleri",
+                name: "📝 Bio Kontrol Sistemi",
                 value:
-                    "• Reklam Engelleme (otomatik)\n" +
-                    "• Link koruması\n" +
-                    "• Invite koruması\n" +
-                    "• Mesaj düzenlemede reklam engeli\n" +
-                    "• ForceBan koruması (unbanlansa bile tekrar banlar)"
+                    "`" +
+                    ".bio-kontrol #kanal → Bio uyarı kanalını ayarlar" +
+                    "`\nKullanıcıların bio’sunda `discord.gg/kaisenst` bulunmuyorsa DM + kanal uyarısı gönderir."
             }
         )
         .setFooter({ text: "vazgucxn ❤ Kaisen" });
@@ -743,5 +749,79 @@ client.on("guildBanRemove", async (ban) => {
 // ===================================================================
 //                          BOTU BAŞLAT
 // ===================================================================
+
+     // ===================================================================
+//                   Kaisen BIO KONTROL SİSTEMİ (ROL YOK)
+// ===================================================================
+client.on("userUpdate", async (oldUser, newUser) => {
+    try {
+        const oldBio = oldUser.bio || "";
+        const newBio = newUser.bio || "";
+
+        // Bio değişmediyse işlem yok
+        if (oldBio === newBio) return;
+
+        // Zorunlu tagler
+        const required = ["discord.gg/kaisenst", "kaisenst", "/kaisenst"];
+
+        const isValid = required.some((tag) =>
+            newBio.toLowerCase().includes(tag.toLowerCase())
+        );
+
+        // Bio uygun → hiçbir şey yapma
+        if (isValid) return;
+
+        // Tüm sunucular üzerinde kontrol
+        for (const guild of client.guilds.cache.values()) {
+            const member = guild.members.cache.get(newUser.id);
+            if (!member) continue;
+
+            // Admin ve bot yetkilileri etkilenmesin
+            if (
+                member.permissions.has(PermissionsBitField.Flags.Administrator) ||
+                member.roles.cache.some(r => botStaffRoles.has(r.id))
+            ) continue;
+
+            // Kanal ayarlı değilse uyarı gönderme
+            if (!bioKontrolChannel) continue;
+
+            const logCh = guild.channels.cache.get(bioKontrolChannel);
+
+            // Kanal varsa uyarı embed gönder
+            if (logCh) {
+                logCh.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor("Red")
+                            .setTitle("⚠️ BIO Tag Eksik!")
+                            .setDescription(`${member} profil bio’sunda gerekli tag yok!`)
+                            .addFields(
+                                { name: "Bio:", value: `\`\`\`${newBio || "Boş"}\`\`\`` },
+                                { name: "Gerekli Tagler:", value: "`discord.gg/kaisenst`\n`kaisenst`\n`/kaisenst`" }
+                            )
+                            .setTimestamp()
+                    ]
+                });
+            }
+
+            // Kullanıcıya DM uyarısı
+            try {
+                await member.send(
+                    "⚠️ **Kaisen Sunucusu Bio Kontrol**\n" +
+                    "Profil bio’nuzda zorunlu tag bulunamadı.\n\n" +
+                    "Lütfen aşağıdakilerden birini ekleyin:\n" +
+                    "• `discord.gg/kaisenst`\n" +
+                    "• `kaisenst`\n" +
+                    "• `/kaisenst`"
+                );
+            } catch {
+                console.log(`DM gönderilemedi: ${newUser.username}`);
+            }
+        }
+    } catch (err) {
+        console.error("Bio kontrol hatası:",
+   
 client.login(TOKEN);
+        
+
 
