@@ -1,4 +1,7 @@
-// ===================== Kaisen Özel Discord Botu (Prefix + Guard + Bio) =====================
+// ===================== K A I S E N   B O T  —  TEMİZ SÜRÜM =====================
+// prefix + guard + bio + etkinlik + forceban + backup sisteminin temel giriş dosyası
+// Bu dosya PART 1/8’dir. Diğer partlar buna eklenir.
+
 const {
     Client,
     GatewayIntentBits,
@@ -11,104 +14,57 @@ const {
     ChannelType,
     ActivityType
 } = require("discord.js");
+
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 
-// ----------- Prefix & Owner Ayarları -----------
+// ===================== AYARLAR =====================
 const PREFIX = ".";
-const FORCE_BAN_OWNER = "827905938923978823"; // Forceban sahibi
-
-// ----------- Express Keep-Alive (Render için) -----------
-const app = express();
-app.get("/", (_req, res) => res.send("Kaisen bot aktif!"));
-app.listen(process.env.PORT || 3000, () =>
-    console.log("Render KeepAlive aktif.")
-);
-
-// ----------- ENV Kontrolü -----------
+const BOT_OWNER = "827905938923978823"; // forceban + backup yetkisi sadece sen
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
+
+// ===================== TOKEN KONTROL =====================
 if (!TOKEN || TOKEN.length < 20) {
-    console.error("❌ Geçersiz DISCORD_BOT_TOKEN!");
+    console.error("❌ Geçersiz TOKEN! Render ortamında DISCORD_BOT_TOKEN ekle.");
     process.exit(1);
 }
 
-// ----------- Discord Client -----------
+// ===================== KEEP-ALIVE =====================
+const app = express();
+app.get("/", (_, res) => res.send("Kaisen bot aktif!"));
+app.listen(process.env.PORT || 3000);
+
+// ===================== CLIENT =====================
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildBans
+        GatewayIntentBits.GuildBans,
+        GatewayIntentBits.MessageContent
     ],
-    partials: [Partials.Message, Partials.Channel, Partials.Reaction]
+    partials: [Partials.Message, Partials.Reaction, Partials.Channel]
 });
 
-// ===================== Global Veriler =====================
-const otobanEvents = new Map();      // otoban verisi
-const forceBannedUsers = new Set();  // forceban kayıtları
-const botStaffRoles = new Set();     // ek yetkili roller
-let bioKontrolChannel = null;        // bio uyarı kanalı (tek sunucu)
-let bioIgnoreRoles = new Set();      // bio kontrol dışı roller
+// ===================== GLOBAL VERİLER =====================
+const forceBannedUsers = new Set();
+const botStaffRoles = new Set();
+let bioChannel = null;
+let bioIgnoreRoles = new Set();
+const etkinlikEvents = new Map();
+let backupData = null;
 
-// ===================== Yardımcı Fonksiyonlar =====================
-
-// --- Bot Yetki Kontrolü ---
+// ===================== YETKİ KONTROL =====================
 function hasBotPermission(member) {
     if (!member) return false;
-
-    if (member.permissions.has(PermissionsBitField.Flags.Administrator))
-        return true;
-
-    if (member.permissions.has(PermissionsBitField.Flags.ManageGuild))
-        return true;
-
-    for (const roleId of botStaffRoles) {
-        if (member.roles.cache.has(roleId)) return true;
+    if (member.id === BOT_OWNER) return true;
+    if (member.permissions.has(PermissionsBitField.Flags.Administrator)) return true;
+    for (const id of botStaffRoles) {
+        if (member.roles.cache.has(id)) return true;
     }
     return false;
-}
-
-// --- Aktif Otoban Bul ---
-function findActiveOtobanInChannel(channelId) {
-    for (const [msgId, data] of otobanEvents.entries()) {
-        if (data.channelId === channelId && !data.closed)
-            return { msgId, data };
-    }
-    return null;
-}
-
-// --- Otoban Mesaj Güncelle ---
-async function updateOtobanMessage(message, data) {
-    const listArr = Array.from(data.participants);
-
-    const embedList =
-        listArr.length === 0
-            ? "Henüz kimse katılmadı."
-            : listArr.map((id, i) => `${i + 1}. <@${id}>`).join("\n");
-
-    const finalList =
-        listArr.length === 0
-            ? "Katılımcı yok."
-            : listArr.map((id, i) => `${i + 1}- <@${id}> ( ${id} )`).join("\n");
-
-    if (!data.closed) {
-        const embed = new EmbedBuilder()
-            .setColor("#000000")
-            .setTitle("🎟️ OTOBAN / ETKİNLİK")
-            .setDescription(data.title)
-            .addFields(
-                { name: "Kişi Sınırı", value: `${data.max}` },
-                { name: "Durum", value: "Kayıtlar açık" },
-                { name: "Liste", value: embedList }
-            );
-        return message.edit({ embeds: [embed], content: null }).catch(() => {});
-    }
-
-    return message.edit({
-        content: `**${data.title}**\n\nKatılımlar sona erdi:\n${finalList}`,
-        embeds: []
-    }).catch(() => {});
 }
 
 // ===================== BOT READY =====================
@@ -117,1149 +73,265 @@ client.once("ready", () => {
 
     client.user.setPresence({
         activities: [
-            {
-                name: "vazgucxn ❤ Kaisen",
-                type: ActivityType.Streaming,
-                url: "https://twitch.tv/discord"
-            }
+            { name: "vazgucxn ❤ kaisen", type: ActivityType.Streaming, url: "https://twitch.tv/discord" }
         ],
         status: "online"
     });
 });
 
 // ===================================================================
-//                      GUARD: REKLAM ENGEL
+//                         REKLAM GUARD
 // ===================================================================
 const adWords = [
-    "discord.gg",
-    "discord.com/invite",
-    "http://",
-    "https://",
-    "t.me/",
-    "telegram.me/",
-    "instagram.com",
-    "tiktok.com",
-    "facebook.com",
-    "youtu.be",
-    "youtube.com",
-    ".gg",
-    ".com",
-    ".net"
+    "discord.gg", "discord.com/invite", "https://", "http://",
+    "t.me/", "telegram", "instagram.com", "facebook.com",
+    "tiktok.com", "youtube.com", "youtu.be", ".gg", ".com", ".net"
 ];
 
-async function checkAd(message) {
+client.on("messageCreate", async msg => {
     try {
-        if (!message.guild || message.author.bot) return;
+        if (!msg.guild || msg.author.bot) return;
 
-        const member = message.member;
-        if (!member) return;
+        if (hasBotPermission(msg.member)) return;
 
-        // Yetkili ve bot staff reklam filtresinden muaf
-        if (
-            hasBotPermission(member) ||
-            member.permissions.has(PermissionsBitField.Flags.ManageMessages)
-        ) {
-            return;
+        const t = msg.content.toLowerCase();
+        if (adWords.some(w => t.includes(w))) {
+            await msg.delete().catch(() => {});
+            const w = await msg.channel.send(`⚠️ ${msg.author}, burada reklam yasak.`);
+            setTimeout(() => w.delete().catch(() => {}), 3000);
         }
-
-        const content = (message.content || "").toLowerCase();
-        if (!content) return;
-
-        if (adWords.some((w) => content.includes(w))) {
-            await message.delete().catch(() => {});
-            const warn = await message.channel.send(
-                `⚠️ ${message.author}, bu kanalda reklam linki paylaşamazsın.`
-            );
-            setTimeout(() => warn.delete().catch(() => {}), 5000);
-        }
-    } catch (err) {
-        console.error("Ad guard error:", err);
+    } catch (e) {
+        console.log("Advertisement Guard Error:", e);
     }
-}
-
-// Reklam kontrol eventi
-client.on("messageCreate", checkAd);
-
-// Mesaj düzenlendiğinde tekrar reklam kontrolü
-client.on("messageUpdate", async (_oldMsg, newMsg) => {
-    try {
-        if (newMsg.partial) {
-            newMsg = await newMsg.fetch();
-        }
-    } catch {
-        return;
-    }
-    checkAd(newMsg);
 });
 
-client.on("messageCreate", async (message) => {
-    if (!message.guild || message.author.bot) return;
-    if (!message.content.startsWith(PREFIX)) return;
-
-    const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
-    const cmd = args.shift()?.toLowerCase();
-
-    // ================================================================
-    //                     BACKUP GERİ YÜKLE — .startbackup
-    // ================================================================
-    if (cmd === "startbackup") {
-    if (message.author.id !== FORCE_BAN_OWNER)
-        return message.reply("❌ Bu komutu sadece sunucu sahibi kullanabilir.");
-
-    const fs = require("fs");
-    const path = require("path");
-    const zlib = require("zlib");
-
-    const zipFilePath = path.join(__dirname, "server_backup.zip");
-    const jsonPath = path.join(__dirname, "server_backup.json");
-
-    if (!fs.existsSync(zipFilePath))
-        return message.reply("❌ Yedek ZIP dosyası bulunamadı!");
-
-    await message.reply("⚠️ Sunucu yedeğe göre yeniden oluşturulacak. `onayla` yaz.");
-
-    const filter = m => m.author.id === message.author.id;
-    const collected = await message.channel.awaitMessages({
-        filter,
-        max: 1,
-        time: 20000
-    }).catch(() => null);
-
-    if (!collected || collected.first().content.toLowerCase() !== "onayla")
-        return message.reply("❌ İşlem iptal edildi.");
-
-    await message.channel.send("🧹 Kanallar temizleniyor...");
-
-    // ✔ SUNUCU TEMİZLEME KISMI BURADA async İÇİNDE!
-    const guild = message.guild;
-
-    // --- TÜM KANALLARI SİL ---
-    for (const ch of guild.channels.cache.values()) {
-        try {
-            await ch.delete("Backup Restore"); // ← Artık async içinde olduğu için hata yok
-        } catch {}
-    }
-
-    await message.channel.send("📁 Yedek yükleniyor...");
-
-    // ZIP → JSON
-    try {
-        const zipData = fs.readFileSync(zipFilePath);
-        const jsonData = zlib.gunzipSync(zipData);
-        fs.writeFileSync(jsonPath, jsonData);
-
-        const backup = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
-
-        // --- Buraya yedeğe göre yeni kanallar / roller oluşturma gelecek ---
-
-        await message.channel.send("✅ Backup başarıyla yüklendi!");
-
-    } catch (err) {
-        console.error(err);
-        return message.reply("❌ Backup yüklenirken hata oluştu!");
-    }
-}
-
-
-        // ====================================================
-        //                     SUNUCU TEMİZLE
-        // ====================================================
-        // Kanallar sil
-        for (const ch of message.guild.channels.cache.values()) {
-            try { await ch.delete("Backup Restore"); } catch {}
-        }
-
-        // Roller sil (EN ÜST ROL → EN ALT ROL olarak silinir)
-        const sortedRoles = message.guild.roles.cache
-            .filter(r => r.id !== message.guild.id)
-            .sort((a, b) => b.position - a.position);
-
-        for (const role of sortedRoles.values()) {
-            try { await role.delete("Backup Restore"); } catch {}
-        }
-
-        await message.channel.send("📦 Roller & Kanallar silindi. Yeniden oluşturuluyor...");
-
-        // ====================================================
-        //                    ROLLERİ YENİ OLUŞTUR
-        // ====================================================
-        const createdRoles = {};
-
-        for (const r of backup.roles) {
-            try {
-                const newRole = await message.guild.roles.create({
-                    name: r.name,
-                    color: r.color,
-                    hoist: r.hoist,
-                    mentionable: r.mentionable,
-                    permissions: BigInt(r.permissions),
-                    reason: "Backup Restore"
-                });
-
-                createdRoles[r.id] = newRole.id;
-
-                await new Promise(res => setTimeout(res, 300)); // rate limit koruması
-
-            } catch (err) {
-                console.error("ROL OLUŞTURMA HATASI:", err);
-            }
-        }
-
-        await message.channel.send("📌 Roller oluşturuldu. Kanallar oluşturuluyor...");
-
-        // ====================================================
-        //                KANALLARI YENİ OLUŞTUR
-        // ====================================================
-        const createdChannels = {};
-
-        // İlk kategoriler
-        for (const ch of backup.channels.filter(c => c.type === 4)) {
-            try {
-                const newCat = await message.guild.channels.create({
-                    name: ch.name,
-                    type: 4,
-                    position: ch.position
-                });
-
-                createdChannels[ch.id] = newCat.id;
-            } catch {}
-        }
-
-        // Normal kanallar
-        for (const ch of backup.channels.filter(c => c.type !== 4)) {
-            try {
-                const parent = ch.parent ? createdChannels[ch.parent] : null;
-
-                const newCh = await message.guild.channels.create({
-                    name: ch.name,
-                    type: ch.type,
-                    nsfw: ch.nsfw,
-                    topic: ch.topic,
-                    rateLimitPerUser: ch.rateLimit,
-                    parent: parent || undefined,
-                    position: ch.position
-                });
-
-                createdChannels[ch.id] = newCh.id;
-
-            } catch (err) {
-                console.error("KANAL OLUŞTURMA HATASI:", err);
-            }
-        }
-
-        await message.channel.send("🔐 Kanal izinleri uygulanıyor...");
-
-        // ====================================================
-        //                PERMISSION OVERWRITES
-        // ====================================================
-        for (const oldCh of backup.channels) {
-            const newChId = createdChannels[oldCh.id];
-            if (!newChId) continue;
-
-            const newCh = message.guild.channels.cache.get(newChId);
-            if (!newCh) continue;
-
-            for (const perm of oldCh.permissionOverwrites) {
-                const targetId = createdRoles[perm.id] || perm.id;
-
-                try {
-                    await newCh.permissionOverwrites.create(targetId, {
-                        allow: BigInt(perm.allow),
-                        deny: BigInt(perm.deny)
-                    });
-                } catch {}
-            }
-
-            await new Promise(res => setTimeout(res, 150));
-        }
-
-        await message.channel.send("🎉 **Backup tamamlandı! Sunucu başarıyla geri yüklendi.**");
-
-    } catch (err) {
-        console.error("RESTORE ERROR:", err);
-        return message.channel.send("❌ Restore sırasında hata oluştu!");
-    }
-}
-
-// ================================================================
-//                       BACKUP OLUŞTUR (ZIP) — .backup
-// ================================================================
-if (cmd === "backup") {
-    if (!hasBotPermission(message.member))
-        return message.reply("❌ Yetkin yok.");
-
-    const msg = await message.reply("⏳ Sunucu yedekleniyor, lütfen bekleyin...");
-
-    const guild = message.guild;
-    const fs = require("fs");
-    const path = require("path");
-    const zlib = require("zlib");
-
-    try {
-        // ============= ROLLERİ YEDEKLE =============
-        const rolesBackup = guild.roles.cache
-            .filter(r => r.id !== guild.id)
-            .sort((a, b) => b.position - a.position)
-            .map(r => ({
-                id: r.id,
-                name: r.name,
-                color: r.color,
-                hoist: r.hoist,
-                position: r.position,
-                permissions: r.permissions.bitfield,
-                mentionable: r.mentionable
-            }));
-
-        // ============= KANAL + PERM YEDEĞİ =============
-        const channelsBackup = [];
-
-        const sorted = guild.channels.cache.sort((a, b) => a.rawPosition - b.rawPosition);
-
-        sorted.forEach(ch => {
-            const base = {
-                id: ch.id,
-                name: ch.name,
-                type: ch.type,
-                parent: ch.parent?.id || null,
-                position: ch.rawPosition,
-                nsfw: ch.nsfw || false,
-                topic: ch.topic || null,
-                rateLimit: ch.rateLimitPerUser || 0,
-                permissionOverwrites: []
-            };
-
-            ch.permissionOverwrites.cache.forEach(ow => {
-                base.permissionOverwrites.push({
-                    id: ow.id,
-                    allow: ow.allow.bitfield,
-                    deny: ow.deny.bitfield,
-                    type: ow.type
-                });
-            });
-
-            channelsBackup.push(base);
-        });
-
-        // ============= YEDEK JSON DOSYASI =============
-        const backupData = {
-            server: {
-                id: guild.id,
-                name: guild.name,
-                created: guild.createdTimestamp,
-                icon: guild.iconURL({ dynamic: true })
-            },
-            roles: rolesBackup,
-            channels: channelsBackup,
-            time: Date.now()
-        };
-
-        const json = JSON.stringify(backupData, null, 2);
-
-        // Geçici JSON dosyası
-        const tempJson = path.join(__dirname, "server_backup.json");
-        fs.writeFileSync(tempJson, json);
-
-        // ============= ZIP OLUŞTUR =============
-        const zipPath = path.join(__dirname, "server_backup.zip");
-        const zip = zlib.gzipSync(fs.readFileSync(tempJson));
-
-        fs.writeFileSync(zipPath, zip);
-
-        // JSON dosyasını gereksiz olduğu için sil
-        fs.unlinkSync(tempJson);
-
-        // ============= DM İLE GÖNDER =============
-        try {
-            await message.author.send({
-                content: "📦 **Sunucu Yedeği Hazır (ZIP Formatında)!**",
-                files: [zipPath]
-            });
-
-            await msg.edit("✔ Yedek başarıyla oluşturuldu ve **DM'den ZIP olarak gönderildi!**");
-
-        } catch (dmErr) {
-            await msg.edit("⚠️ DM kapalı! ZIP dosyası buraya gönderiliyor...");
-
-            try {
-                await message.channel.send({
-                    content: "📦 Yedek ZIP dosyan:",
-                    files: [zipPath]
-                });
-            } catch {
-                return msg.edit("❌ ZIP dosyası gönderilemedi! (Dosya çok büyük olabilir)");
-            }
-        }
-
-        // ZIP dosyasını sil
-        fs.unlinkSync(zipPath);
-
-    } catch (err) {
-        console.error("BACKUP ERROR:", err);
-        return msg.edit("❌ Backup alınırken hata oluştu!");
-    }
-}
-
-// ================================================================
-//                       BACKUP OLUŞTUR (.backup)
-// ================================================================
-if (cmd === "backup") {
-    if (!hasBotPermission(message.member))
-        return message.reply("❌ Yetkin yok.");
-
-    message.reply("⏳ Sunucu yedekleniyor, lütfen bekleyin...");
-
-    const guild = message.guild;
-
-    // ============= ROLLERİ YEDEKLE =============
-    const rolesBackup = guild.roles.cache
-        .filter(r => r.id !== guild.id)
-        .sort((a, b) => b.position - a.position)
-        .map(r => ({
-            id: r.id,
-            name: r.name,
-            color: r.color,
-            hoist: r.hoist,
-            position: r.position,
-            permissions: r.permissions.bitfield,
-            mentionable: r.mentionable
-        }));
-
-    // ============= KATEGORİ + KANAL YEDEĞİ =============
-    const channelsBackup = [];
-
-    const sorted = guild.channels.cache.sort((a, b) => a.rawPosition - b.rawPosition);
-
-    sorted.forEach(ch => {
-        const base = {
-            id: ch.id,
-            name: ch.name,
-            type: ch.type,
-            parent: ch.parent?.id || null,
-            position: ch.rawPosition,
-            nsfw: ch.nsfw || false,
-            topic: ch.topic || null,
-            rateLimit: ch.rateLimitPerUser || 0,
-            permissionOverwrites: []
-        };
-
-        ch.permissionOverwrites.cache.forEach(ow => {
-            base.permissionOverwrites.push({
-                id: ow.id,
-                allow: ow.allow.bitfield,
-                deny: ow.deny.bitfield,
-                type: ow.type
-            });
-        });
-
-        channelsBackup.push(base);
-    });
-
-    // ============= YEDEK DOSYASI =============
-    const backupData = {
-        server: {
-            id: guild.id,
-            name: guild.name,
-            created: guild.createdTimestamp,
-            icon: guild.iconURL({ dynamic: true })
-        },
-        roles: rolesBackup,
-        channels: channelsBackup,
-        time: Date.now()
-    };
-
-    // JSON’a çevir
-    const json = JSON.stringify(backupData, null, 2);
-
-    // Geçici dosya yolunu belirle
-    const fs = require("fs");
-    const path = require("path");
-    const tempPath = path.join(__dirname, "server_backup.json");
-
-    fs.writeFileSync(tempPath, json);
-
-    // DM olarak gönder
-    try {
-        await message.author.send({
-            content: "📦 **Sunucu Yedeği Hazır!**\n`server_backup.json` dosyan aşağıdadır:",
-            files: [tempPath]
-        });
-
-        message.channel.send("✔ **Yedek başarıyla oluşturuldu ve DM’den gönderildi!**");
-
-        // Dosyayı sil
-        fs.unlinkSync(tempPath);
-
-    } catch (err) {
-        console.error(err);
-        message.reply("❌ DM kapalı olduğu için yedek gönderilemedi!");
-    }
-}
-
 // ===================================================================
-//                       PREFIX KOMUTLARI (TEK EVENT)
+//                      PREFIX KOMUT ALGILAYICI
 // ===================================================================
-client.on("messageCreate", async (message) => {
+client.on("messageCreate", async message => {
     try {
         if (!message.guild || message.author.bot) return;
         if (!message.content.startsWith(PREFIX)) return;
 
-        // Çift işlem engelleme
-        if (message._executed) return;
-        message._executed = true;
+        let args = message.content.slice(PREFIX.length).trim().split(/\s+/);
+        let cmd = args.shift()?.toLowerCase();
 
-        const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
-        const cmd = args.shift()?.toLowerCase();
+        // tüm komutlar tek handler içinde ileride doldurulacak (part 2/8, part 3/8...)
 
-        // ================================================================
-        //                     YARDIM MENÜSÜ
-        // ================================================================
-        if (cmd === "yardım" || cmd === "yardim") {
-            const embed = new EmbedBuilder()
-                .setTitle("🛠 Kaisen Bot Yardım Menüsü")
-                .setColor("#000000")
-                .addFields(
-                    {
-                        name: "🎟 OTOBAN Sistem",
-                        value:
-                            "`" +
-                            ".otoban #kanal limit açıklama\n" +
-                            ".otoban-bitir\n" +
-                            ".otobanekle @kullanıcı\n" +
-                            ".otobançıkar @kullanıcı" +
-                            "`"
-                    },
-                    {
-                        name: "🧹 Moderasyon",
-                        value:
-                            "`" +
-                            ".sil <miktar> → Mesaj siler\n" +
-                            ".nuke → Kanalı sıfırlar" +
-                            "`"
-                    },
-                    {
-                        name: "💌 DM Sistemi",
-                        value: "`" + ".dm @rol mesaj" + "`"
-                    },
-                    {
-                        name: "📨 Başvuru Sistemi",
-                        value: "`" + ".basvurupanel @YetkiliRol" + "`"
-                    },
-                    {
-                        name: "🛡 Yetki Sistemi",
-                        value:
-                            "`" +
-                            ".yetkiekle @rol\n" +
-                            ".yetkicikar @rol\n" +
-                            ".yetkiler" +
-                            "`"
-                    },
-                    {
-                        name: "🚫 ForceBan Sistemi",
-                        value:
-                            "`" +
-                            ".forceban @kullanıcı/id sebep\n" +
-                            ".unforceban @kullanıcı/id" +
-                            "`\n(Sadece <@" + FORCE_BAN_OWNER + "> kullanabilir!)"
-                    },
-                    {
-                        name: "📝 Bio Kontrol Sistemi",
-                        value:
-                            "`" +
-                            ".bio-kontrol #kanal → Uyarı kanalı seç\n" +
-                            ".bio-kontrol-rol @rol → Bio kontrol dışı rol\n" +
-                            ".bio-tara @kullanıcı → Tek kişiyi tara\n" +
-                            ".kontrol @rol → Roldaki herkesi tara" +
-                            "`"
-                    }
-                )
-                .setFooter({ text: "vazgucxn ❤ Kaisen" });
-
-            return message.channel.send({ embeds: [embed] });
-        }
-
-        // ================================================================
-        //                   BIO KONTROL KANALI AYARI
-        // ================================================================
-        if (cmd === "bio-kontrol") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const ch = message.mentions.channels.first();
-            if (!ch) return message.reply("Kullanım: `.bio-kontrol #kanal`");
-
-            bioKontrolChannel = ch.id;
-
-            return message.reply(`✅ Bio kontrol uyarı kanalı ayarlandı: ${ch}`);
-        }
-
-        // ================================================================
-        //                BIO KONTROL MUAF ROL AYARI
-        // ================================================================
-        if (cmd === "bio-kontrol-rol") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const role = message.mentions.roles.first();
-            if (!role) return message.reply("Kullanım: `.bio-kontrol-rol @rol`");
-
-            bioIgnoreRoles.add(role.id);
-
-            return message.reply(`🟨 ${role} artık bio kontrolünden muaftır.`);
-        }
-
-        // ================================================================
-        //                TEK KİŞİYİ BIO KONTROL (bio-tara)
-        // ================================================================
-        if (cmd === "bio-tara") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const user = message.mentions.users.first();
-            if (!user) return message.reply("Kullanım: `.bio-tara @kullanıcı`");
-
-            const member = message.guild.members.cache.get(user.id);
-            if (!member) return message.reply("❌ Kullanıcı sunucuda değil.");
-
-            const bio = user.bio || "";
-            const required = ["discord.gg/kaisenst", "kaisenst", "/kaisenst"];
-
-            // Muaf rol kontrolü
-            if (member.roles.cache.some(r => bioIgnoreRoles.has(r.id)))
-                return message.reply("ℹ️ Bu kullanıcı bio kontrolünden muaftır.");
-
-            const isValid = required.some(tag =>
-                bio.toLowerCase().includes(tag)
-            );
-
-            if (isValid)
-                return message.reply(`✅ ${user} bio kontrolünden geçti.`);
-
-            // Kanal uyarısı
-            if (bioKontrolChannel) {
-                const ch = message.guild.channels.cache.get(bioKontrolChannel);
-                if (ch) {
-                    ch.send({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor("Red")
-                                .setTitle("⚠️ Bio Tag Eksik!")
-                                .setDescription(`${user} bio’sunda tag bulunamadı!`)
-                                .addFields(
-                                    { name: "Bio:", value: bio || "Boş" }
-                                )
-                        ]
-                    });
-                }
-            }
-
-            // DM uyarısı
-            try {
-                await user.send(
-                    "⚠️ **Bio kontrol uyarısı:** Bio’nuzda Kaisen tagleri bulunmuyor!\n" +
-                    "Ekleyiniz: `discord.gg/kaisenst`, `kaisenst` veya `/kaisenst`"
-                );
-            } catch {}
-
-            return message.reply(`⚠️ ${user} için bio uyarıları gönderildi.`);
-        }
-
-        // ================================================================
-        //              ROLDEKİ HERKESİ BIO TARAMA (.kontrol)
-        // ================================================================
-        if (cmd === "kontrol") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const role = message.mentions.roles.first();
-            if (!role) return message.reply("Kullanım: `.kontrol @rol`");
-
-            const required = ["discord.gg/kaisenst", "kaisenst", "/kaisenst"];
-
-            let total = 0, passed = 0, failed = 0, dmClosed = 0;
-
-            const logCh = bioKontrolChannel
-                ? message.guild.channels.cache.get(bioKontrolChannel)
-                : null;
-
-            for (const member of role.members.values()) {
-                const user = member.user;
-                const bio = user.bio || "";
-
-                // Admin, yetkili, muaf roller → atla
-                if (
-                    member.permissions.has(PermissionsBitField.Flags.Administrator) ||
-                    member.roles.cache.some(r => botStaffRoles.has(r.id)) ||
-                    member.roles.cache.some(r => bioIgnoreRoles.has(r.id))
-                ) continue;
-
-                total++;
-
-                const ok = required.some(tag =>
-                    bio.toLowerCase().includes(tag)
-                );
-
-                if (ok) {
-                    passed++;
-                    continue;
-                }
-
-                failed++;
-
-                // Kanal uyarısı
-                if (logCh) {
-                    logCh.send({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor("Red")
-                                .setTitle("⚠️ Bio Eksik (Toplu Kontrol)")
-                                .setDescription(`${member} bio’sunda tag yok!`)
-                                .addFields(
-                                    { name: "Bio:", value: bio || "Boş" }
-                                )
-                        ]
-                    });
-                }
-
-                // DM
-                try {
-                    await user.send(
-                        "⚠️ **Bio Kontrol**\n" +
-                        "Bio’nuzda gerekli tagler bulunamadı.\n" +
-                        "Ekleyiniz: `discord.gg/kaisenst`, `kaisenst` veya `/kaisenst`"
-                    );
-                } catch {
-                    dmClosed++;
-                }
-            }
-
-            return message.reply(
-                `📌 **Bio Kontrol Raporu**\n` +
-                `Rol: ${role}\n\n` +
-                `🟩 Geçen: **${passed}**\n` +
-                `🟥 Kalan: **${failed}**\n` +
-                `✉️ DM Kapalı: **${dmClosed}**\n` +
-                `👥 İncelenen: **${total} kişi**`
-            );
-        }
-
-        // ================================================================
-        //                    .sil (mesaj sil)
-        // ================================================================
-        if (cmd === "sil") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const amount = Number(args[0]);
-            if (!amount || amount < 1 || amount > 100)
-                return message.reply("Kullanım: `.sil 1-100`");
-
-            await message.channel.bulkDelete(amount, true);
-
-            const msg = await message.channel.send(`🧹 **${amount} mesaj silindi.**`);
-            setTimeout(() => msg.delete().catch(() => {}), 3000);
-            return;
-        }
-
-        // ================================================================
-        //                      .nuke
-        // ================================================================
-        if (cmd === "nuke") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const channel = message.channel;
-            const position = channel.position;
-            const parent = channel.parent;
-            const perms = channel.permissionOverwrites.cache.map(p => ({
-                id: p.id,
-                allow: p.allow.bitfield,
-                deny: p.deny.bitfield
-            }));
-
-            const newCh = await channel.clone({ permissionOverwrites: perms });
-            await newCh.setParent(parent || null);
-            await newCh.setPosition(position);
-            await channel.delete().catch(() => {});
-
-            newCh.send("💣 **Kanal başarıyla nuke edildi!**");
-            return;
-        }
-
-        // ================================================================
-        //                      YETKİ KOMUTLARI
-        // ================================================================
-        if (cmd === "yetkiekle") {
-            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
-                return message.reply("❌ Sadece admin ekleyebilir.");
-
-            const role = message.mentions.roles.first();
-            if (!role) return message.reply("Kullanım: `.yetkiekle @rol`");
-
-            botStaffRoles.add(role.id);
-            return message.reply(`🛡 ${role} artık bot yetkilisi.`);
-        }
-
-        if (cmd === "yetkicikar") {
-            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
-                return message.reply("❌ Sadece admin kaldırabilir.");
-
-            const role = message.mentions.roles.first();
-            if (!role) return message.reply("Kullanım: `.yetkicikar @rol`");
-
-            botStaffRoles.delete(role.id);
-            return message.reply(`🛡 ${role} artık bot yetkilisi değil.`);
-        }
-
-        if (cmd === "yetkiler") {
-            if (botStaffRoles.size === 0)
-                return message.reply("🛡 Hiç yetkili rol yok.");
-
-            return message.reply(
-                "🛡 Yetkili Roller:\n" +
-                [...botStaffRoles].map(id => `<@&${id}>`).join("\n")
-            );
-        }
-
-        // ================================================================
-        //                      DM GÖNDER (rol)
-        // ================================================================
-        if (cmd === "dm") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const role = message.mentions.roles.first();
-            if (!role) return message.reply("Kullanım: `.dm @rol mesaj`");
-
-            args.shift();
-            const text = args.join(" ");
-            if (!text) return message.reply("❌ Mesaj girilmedi.");
-
-            const members = await message.guild.members.fetch();
-            const targets = members.filter(m => m.roles.cache.has(role.id) && !m.user.bot);
-
-            const embed = new EmbedBuilder()
-                .setColor("#000000")
-                .setDescription(text)
-                .setFooter({ text: `Gönderen: ${message.author.tag}` });
-
-            let ok = 0, fail = 0;
-
-            for (const member of targets.values()) {
-                try {
-                    await member.send({ embeds: [embed] });
-                    ok++;
-                } catch {
-                    fail++;
-                }
-            }
-
-            return message.reply(
-                `✉️ DM Gönderildi → Başarılı: ${ok}, Başarısız (DM Kapalı): ${fail}`
-            );
-        }
-
-        // ================================================================
-        //                BAŞVURU PANELİ KUR (.basvurupanel)
-        // ================================================================
-        if (cmd === "basvurupanel") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const role = message.mentions.roles.first();
-            if (!role) return message.reply("Kullanım: `.basvurupanel @rol`");
-
-            const embed = new EmbedBuilder()
-                .setTitle("📨 Başvuru Paneli")
-                .setColor("#000000")
-                .setDescription("Aşağıdaki butona tıklayarak başvuru açabilirsiniz.");
-
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`apply_create:${role.id}`)
-                    .setLabel("Başvuru Aç")
-                    .setStyle(ButtonStyle.Success)
-            );
-
-            await message.channel.send({ embeds: [embed], components: [row] });
-            return message.reply("✔ Başvuru paneli oluşturuldu.");
-        }
-
-        // ================================================================
-        //                       FORCEBAN SISTEMI
-        // ================================================================
-        if (cmd === "forceban") {
-            if (message.author.id !== FORCE_BAN_OWNER)
-                return message.reply("❌ Bu komutu sadece bot sahibi kullanabilir.");
-
-            let targetId = message.mentions.users.first()?.id || args.shift();
-            if (!targetId) return message.reply("Kullanım: `.forceban @kullanıcı/id sebep`");
-
-            const reason = args.join(" ") || "Forceban";
-
-            forceBannedUsers.add(targetId);
-
-            try {
-                await message.guild.bans.create(targetId, { reason });
-                return message.reply(`🚫 Forceban uygulandı → ${targetId}`);
-            } catch {
-                return message.reply("❌ Ban atılamadı. ID doğru mu?");
-            }
-        }
-
-        if (cmd === "unforceban") {
-            if (message.author.id !== FORCE_BAN_OWNER)
-                return message.reply("❌ Bu komutu sadece bot sahibi açabilir.");
-
-            let targetId = message.mentions.users.first()?.id || args.shift();
-            if (!targetId) return message.reply("Kullanım: `.unforceban @kullanıcı/id`");
-
-            forceBannedUsers.delete(targetId);
-
-            try { await message.guild.bans.remove(targetId); } catch {}
-
-            return message.reply(`✔ Unforceban → ${targetId}`);
-        }
-
-        // ================================================================
-        //                         OTOBAN BAŞLAT (.otoban)
-        // ================================================================
-        if (cmd === "otoban") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const channel = message.mentions.channels.first();
-            if (!channel) return message.reply("Kullanım: `.otoban #kanal limit açıklama`");
-
-            args.shift();
-            const limit = Number(args.shift());
-            if (!limit || limit < 1) return message.reply("❌ Limit hatalı.");
-
-            const title = args.join(" ");
-            if (!title) return message.reply("❌ Açıklama gir.");
-
-            const embed = new EmbedBuilder()
-                .setTitle("🎟️ OTOBAN")
-                .setColor("#000000")
-                .setDescription(title)
-                .addFields(
-                    { name: "Limit", value: `${limit}` },
-                    { name: "Durum", value: "Açık" },
-                    { name: "Liste", value: "Henüz kimse yok." }
-                );
-
-            const msg = await channel.send({ embeds: [embed] });
-            await msg.react("✅");
-
-            otobanEvents.set(msg.id, {
-                max: limit,
-                title,
-                participants: new Set(),
-                closed: false,
-                channelId: channel.id
-            });
-
-            return message.reply(`✔ Otoban açıldı: ${channel}`);
-        }
-
-        // ================================================================
-        //                     OTOBAN BİTİR (.otoban-bitir)
-        // ================================================================
-        if (cmd === "otoban-bitir") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const event = findActiveOtobanInChannel(message.channel.id);
-            if (!event) return message.reply("❌ Aktif otoban yok.");
-
-            const { msgId, data } = event;
-            const msg = await message.channel.messages.fetch(msgId);
-
-            data.closed = true;
-
-            const r = msg.reactions.resolve("✅");
-            if (r) await r.remove().catch(() => {});
-
-            await updateOtobanMessage(msg, data);
-
-            return message.reply(`✔ Otoban kapatıldı.`);
-        }
-
-        // ================================================================
-        //                OTOBAN EKLE / ÇIKAR
-        // ================================================================
-        if (cmd === "otobanekle") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const event = findActiveOtobanInChannel(message.channel.id);
-            if (!event) return message.reply("❌ Aktif otoban yok.");
-
-            const user = message.mentions.users.first();
-            if (!user) return message.reply("Kullanım: `.otobanekle @kullanıcı`");
-
-            const { msgId, data } = event;
-            data.participants.add(user.id);
-
-            const msg = await message.channel.messages.fetch(msgId);
-            await updateOtobanMessage(msg, data);
-
-            return message.reply(`✔ ${user} listeye eklendi.`);
-        }
-
-        if (cmd === "otobançıkar" || cmd === "otobancikar") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const event = findActiveOtobanInChannel(message.channel.id);
-            if (!event) return message.reply("❌ Aktif otoban yok.");
-
-            const user = message.mentions.users.first();
-            if (!user) return message.reply("Kullanım: `.otobançıkar @kullanıcı`");
-
-            const { msgId, data } = event;
-            data.participants.delete(user.id);
-
-            const msg = await message.channel.messages.fetch(msgId);
-            await updateOtobanMessage(msg, data);
-
-            return message.reply(`✔ ${user} listeden çıkarıldı.`);
+        // geçici test
+        if (cmd === "ping") {
+            return message.reply("Pong!");
         }
 
     } catch (err) {
-        console.error("Prefix komut hatası:", err);
+        console.error("PREFIX ERROR:", err);
     }
 });
-
 // ===================================================================
-//              BAŞVURU BUTTON SİSTEMİ (Başvuru Aç / Kapat)
+//                      E T K İ N L İ K   S İ S T E M İ
 // ===================================================================
-client.on("interactionCreate", async (interaction) => {
-    try {
-        if (!interaction.isButton()) return;
 
-        // ---------------------------------------------------------------
-        //                     BAŞVURU AÇMA
-        // ---------------------------------------------------------------
-        if (interaction.customId.startsWith("apply_create:")) {
-            await interaction.deferReply({ ephemeral: true });
+if (cmd === "etkinlik") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Bu komut için yetkin yok.");
 
-            const staffRoleId = interaction.customId.split(":")[1];
-            const guild = interaction.guild;
+    const channel = message.mentions.channels.first();
+    if (!channel)
+        return message.reply("Kullanım: `.etkinlik #kanal limit açıklama`");
 
-            const baseName = `basvuru-${interaction.user.username}`
-                .toLowerCase()
-                .replace(/[^a-z0-9\-]/g, "")
-                .slice(0, 20);
+    args.shift();
+    const limit = Number(args.shift());
+    if (!limit || limit < 1)
+        return message.reply("❌ Limit sayısı hatalı.");
 
-            const ticketChannel = await guild.channels.create({
-                name: `${baseName}-${interaction.user.id.slice(-4)}`,
-                type: ChannelType.GuildText,
-                permissionOverwrites: [
-                    {
-                        id: guild.roles.everyone,
-                        deny: [PermissionsBitField.Flags.ViewChannel]
-                    },
-                    {
-                        id: interaction.user.id,
-                        allow: [
-                            PermissionsBitField.Flags.ViewChannel,
-                            PermissionsBitField.Flags.SendMessages,
-                            PermissionsBitField.Flags.ReadMessageHistory
-                        ]
-                    },
-                    {
-                        id: staffRoleId,
-                        allow: [
-                            PermissionsBitField.Flags.ViewChannel,
-                            PermissionsBitField.Flags.SendMessages,
-                            PermissionsBitField.Flags.ReadMessageHistory
-                        ]
-                    }
-                ]
-            });
+    const title = args.join(" ");
+    if (!title) return message.reply("❌ Açıklama yazmalısın.");
 
-            await ticketChannel.send({
-                content: `<@${interaction.user.id}> | <@&${staffRoleId}>`,
-                embeds: [
-                    new EmbedBuilder()
-                        .setTitle("📨 Başvuru Kanalı Açıldı")
-                        .setDescription("Aşağıdaki butondan başvuruyu kapatabilirsin.")
-                        .setColor("#000000")
-                ],
-                components: [
-                    new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(`apply_close:${staffRoleId}:${interaction.user.id}`)
-                            .setLabel("Başvuruyu Kapat")
-                            .setStyle(ButtonStyle.Danger)
-                    )
-                ]
-            });
+    const embed = new EmbedBuilder()
+        .setTitle("🎟️ ETKİNLİK")
+        .setColor("#000000")
+        .setDescription(title)
+        .addFields(
+            { name: "Kişi Sınırı", value: `${limit}` },
+            { name: "Durum", value: "Açık" },
+            { name: "Katılımcılar", value: "Henüz kimse yok." }
+        );
 
-            return interaction.editReply(`✔ Başvuru kanalın açıldı: ${ticketChannel}`);
+    const msg = await channel.send({ embeds: [embed] });
+    await msg.react("✔️");
+
+    etkinlikEvents.set(msg.id, {
+        max: limit,
+        title,
+        participants: new Set(),
+        closed: false,
+        channelId: channel.id
+    });
+
+    return message.reply(`✔ Etkinlik başarıyla başladı: ${channel}`);
+}
+
+// -------------------------------------------------------------------
+
+if (cmd === "etkinlik-bitir") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    // aktif etkinlik bul
+    let active = null;
+    for (const [id, data] of etkinlikEvents.entries()) {
+        if (data.channelId === message.channel.id && !data.closed) {
+            active = { id, data };
+            break;
         }
-
-        // ---------------------------------------------------------------
-        //                     BAŞVURUYU KAPATMA
-        // ---------------------------------------------------------------
-        if (interaction.customId.startsWith("apply_close:")) {
-            const [, staffRoleId, ownerId] = interaction.customId.split(":");
-
-            const channel = interaction.channel;
-
-            const isOwner = interaction.user.id === ownerId;
-            const isStaff =
-                interaction.member.roles.cache.has(staffRoleId) ||
-                interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
-
-            if (!isOwner && !isStaff) {
-                return interaction.reply({
-                    content: "❌ Bu başvuruyu kapatmaya yetkin yok.",
-                    ephemeral: true
-                });
-            }
-
-            await channel.permissionOverwrites.edit(ownerId, {
-                ViewChannel: false,
-                SendMessages: false
-            }).catch(() => {});
-
-            if (!channel.name.startsWith("closed-")) {
-                await channel.setName(`closed-${channel.name}`.slice(0, 32)).catch(() => {});
-            }
-
-            await interaction.reply("🔒 Başvuru kapatıldı. Kanal kayıt için saklandı.");
-        }
-    } catch (err) {
-        console.error("interactionCreate error:", err);
     }
-});
+    if (!active)
+        return message.reply("❌ Bu kanalda açık etkinlik yok.");
 
+    const { id, data } = active;
+    const msg = await message.channel.messages.fetch(id).catch(() => null);
+    if (!msg) return message.reply("❌ Etkinlik mesajı bulunamadı!");
+
+    data.closed = true;
+
+    const r = msg.reactions.resolve("✔️");
+    if (r) r.remove().catch(() => {});
+
+    // final liste oluştur
+    const list = [...data.participants];
+    const final =
+        list.length === 0
+            ? "Kimse katılmadı."
+            : list.map((u, i) => `${i + 1}. <@${u}> (${u})`).join("\n");
+
+    await msg.edit({
+        content: `🎟️ **${data.title}**\n\n**Etkinlik kapatıldı.**\n${final}`,
+        embeds: []
+    });
+
+    return message.reply("✔ Etkinlik başarıyla kapatıldı.");
+}
+
+// -------------------------------------------------------------------
+
+if (cmd === "etkinlik-ekle") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const user = message.mentions.users.first();
+    if (!user) return message.reply("Kullanım: `.etkinlik-ekle @kullanıcı`");
+
+    // aktif etkinlik bul
+    let active = null;
+    for (const [id, data] of etkinlikEvents.entries()) {
+        if (data.channelId === message.channel.id && !data.closed) {
+            active = { id, data };
+            break;
+        }
+    }
+    if (!active) return message.reply("❌ Bu kanalda açık etkinlik yok.");
+
+    const { id, data } = active;
+    data.participants.add(user.id);
+
+    const msg = await message.channel.messages.fetch(id);
+
+    // embed güncelle
+    const list =
+        [...data.participants].length === 0
+            ? "Henüz kimse yok."
+            : [...data.participants]
+                  .map((u, i) => `${i + 1}. <@${u}>`)
+                  .join("\n");
+
+    const embed = new EmbedBuilder()
+        .setTitle("🎟️ ETKİNLİK")
+        .setColor("#000000")
+        .setDescription(data.title)
+        .addFields(
+            { name: "Kişi Sınırı", value: `${data.max}` },
+            { name: "Durum", value: "Açık" },
+            { name: "Katılımcılar", value: list }
+        );
+
+    await msg.edit({ embeds: [embed] });
+
+    return message.reply(`✔ ${user} etkinliğe eklendi.`);
+}
+
+// -------------------------------------------------------------------
+
+if (cmd === "etkinlik-çıkar" || cmd === "etkinlik-cikar") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const user = message.mentions.users.first();
+    if (!user) return message.reply("Kullanım: `.etkinlik-çıkar @kullanıcı`");
+
+    let active = null;
+    for (const [id, data] of etkinlikEvents.entries()) {
+        if (data.channelId === message.channel.id && !data.closed) {
+            active = { id, data };
+            break;
+        }
+    }
+    if (!active) return message.reply("❌ Bu kanalda açık etkinlik yok.");
+
+    const { id, data } = active;
+
+    data.participants.delete(user.id);
+
+    const msg = await message.channel.messages.fetch(id);
+
+    const list =
+        [...data.participants].length === 0
+            ? "Henüz kimse yok."
+            : [...data.participants]
+                  .map((u, i) => `${i + 1}. <@${u}>`)
+                  .join("\n");
+
+    const embed = new EmbedBuilder()
+        .setTitle("🎟️ ETKİNLİK")
+        .setColor("#000000")
+        .setDescription(data.title)
+        .addFields(
+            { name: "Kişi Sınırı", value: `${data.max}` },
+            { name: "Durum", value: "Açık" },
+            { name: "Katılımcılar", value: list }
+        );
+
+    await msg.edit({ embeds: [embed] });
+
+    return message.reply(`✔ ${user} etkinlik listesinden çıkarıldı.`);
+}
 // ===================================================================
-//              OTOBAN REAKSİYON SİSTEMİ (✅ ile kayıt)
+//               ETKİNLİK REAKSİYON SİSTEMİ (✔️ ile Kayıt)
 // ===================================================================
+
 client.on("messageReactionAdd", async (reaction, user) => {
     try {
         if (user.bot) return;
 
+        // partial fix
         if (reaction.partial) {
             try { await reaction.fetch(); } catch { return; }
         }
 
         const msg = reaction.message;
         if (!msg.guild) return;
-        if (reaction.emoji.name !== "✅") return;
 
-        const data = otobanEvents.get(msg.id);
+        if (reaction.emoji.name !== "✔️") return;
+
+        const data = etkinlikEvents.get(msg.id);
         if (!data) return;
 
-        // Kapandıysa kimse katılamaz
+        // Kapalı ise ✔ kabul edilmez
         if (data.closed) {
             reaction.users.remove(user.id).catch(() => {});
             return;
         }
 
-        // Zaten listede ise tekrar ekleme
+        // Zaten listede ise bir şey yapma
         if (data.participants.has(user.id)) return;
 
         // Limit dolmuşsa alma
@@ -1268,21 +340,46 @@ client.on("messageReactionAdd", async (reaction, user) => {
             return;
         }
 
+        // Ekle
         data.participants.add(user.id);
 
-        // Limit dolduysa oto kapanır
+        // Eğer limit dolduysa otomatik kapat
         if (data.participants.size >= data.max) {
             data.closed = true;
 
-            const r = msg.reactions.resolve("✅");
+            const r = msg.reactions.resolve("✔️");
             if (r) r.remove().catch(() => {});
         }
 
-        updateOtobanMessage(msg, data);
+        // Embed güncelle
+        const list =
+            [...data.participants].length === 0
+                ? "Henüz kimse yok."
+                : [...data.participants]
+                    .map((u, i) => `${i + 1}. <@${u}>`)
+                    .join("\n");
+
+        const embed = new EmbedBuilder()
+            .setTitle("🎟️ ETKİNLİK")
+            .setColor("#000000")
+            .setDescription(data.title)
+            .addFields(
+                { name: "Kişi Sınırı", value: `${data.max}` },
+                { name: "Durum", value: data.closed ? "KAPANDI" : "Açık" },
+                { name: "Katılımcılar", value: list }
+            );
+
+        await msg.edit({ embeds: [embed] });
+
     } catch (err) {
-        console.error("messageReactionAdd error:", err);
+        console.error("Etkinlik Reaction Add Error:", err);
     }
 });
+
+
+// ===================================================================
+//          ✔ Tepki KALDIRILINCA Listeden Çıkma (Kapalı değilse)
+// ===================================================================
 
 client.on("messageReactionRemove", async (reaction, user) => {
     try {
@@ -1294,38 +391,388 @@ client.on("messageReactionRemove", async (reaction, user) => {
 
         const msg = reaction.message;
         if (!msg.guild) return;
-        if (reaction.emoji.name !== "✅") return;
 
-        const data = otobanEvents.get(msg.id);
+        if (reaction.emoji.name !== "✔️") return;
+
+        const data = etkinlikEvents.get(msg.id);
         if (!data) return;
-        if (data.closed) return; // Kapandıysa listeden düşme yok
 
-        if (data.participants.has(user.id)) {
-            data.participants.delete(user.id);
-            updateOtobanMessage(msg, data);
-        }
+        // Kapalı etkinlikten çıkamaz
+        if (data.closed) return;
+
+        if (!data.participants.has(user.id)) return;
+
+        // Listeden çıkar
+        data.participants.delete(user.id);
+
+        // Embed güncelle
+        const list =
+            [...data.participants].length === 0
+                ? "Henüz kimse yok."
+                : [...data.participants]
+                    .map((u, i) => `${i + 1}. <@${u}>`)
+                    .join("\n");
+
+        const embed = new EmbedBuilder()
+            .setTitle("🎟️ ETKİNLİK")
+            .setColor("#000000")
+            .setDescription(data.title)
+            .addFields(
+                { name: "Kişi Sınırı", value: `${data.max}` },
+                { name: "Durum", value: "Açık" },
+                { name: "Katılımcılar", value: list }
+            );
+
+        await msg.edit({ embeds: [embed] });
+
     } catch (err) {
-        console.error("messageReactionRemove error:", err);
+        console.error("Etkinlik Reaction Remove Error:", err);
     }
 });
-
 // ===================================================================
-//                      FORCEBAN KORUMA
+//                           BACKUP SİSTEMİ
 // ===================================================================
-client.on("guildBanRemove", async (ban) => {
-    try {
-        const userId = ban.user.id;
-        if (!forceBannedUsers.has(userId)) return;
 
-        await ban.guild.bans.create(userId, {
-            reason: "Forceban koruması: tekrar yasaklandı."
+const fs = require("fs");
+const path = require("path");
+const zlib = require("zlib");
+
+const BACKUP_ZIP = path.join(__dirname, "server_backup.zip");
+const BACKUP_JSON = path.join(__dirname, "server_backup.json");
+
+// ================================================================
+//                         .backup KOMUTU
+// ================================================================
+if (cmd === "backup") {
+    if (message.author.id !== FORCE_BAN_OWNER)
+        return message.reply("❌ Bu komutu sadece sunucu sahibi kullanabilir.");
+
+    const guild = message.guild;
+
+    await message.reply("📦 **Sunucu yedekleniyor...** (Kanallar, roller, izinler)");
+
+    // Rolleri kaydet
+    const roles = guild.roles.cache
+        .filter(r => r.id !== guild.id)
+        .map(r => ({
+            name: r.name,
+            color: r.color,
+            hoist: r.hoist,
+            position: r.rawPosition,
+            permissions: r.permissions.bitfield,
+            mentionable: r.mentionable
+        }))
+        .sort((a, b) => b.position - a.position);
+
+    // Kanalları kaydet
+    const channels = [];
+    guild.channels.cache
+        .sort((a, b) => a.rawPosition - b.rawPosition)
+        .forEach(ch => {
+            channels.push({
+                name: ch.name,
+                type: ch.type,
+                parent: ch.parentId,
+                position: ch.rawPosition,
+                topic: ch.topic || null,
+                nsfw: ch.nsfw || false,
+                rateLimitPerUser: ch.rateLimitPerUser || 0,
+                permissionOverwrites: ch.permissionOverwrites.cache.map(o => ({
+                    id: o.id,
+                    allow: o.allow.bitfield,
+                    deny: o.deny.bitfield
+                }))
+            });
         });
 
-        console.log(`Forceban koruması → ${userId} tekrar banlandı.`);
-    } catch (err) {
-        console.error("guildBanRemove error:", err);
+    const backupData = { roles, channels };
+
+    // JSON kaydet
+    fs.writeFileSync(BACKUP_JSON, JSON.stringify(backupData, null, 2));
+
+    // ZIP'e sıkıştır
+    const zipped = zlib.gzipSync(JSON.stringify(backupData, null, 2));
+    fs.writeFileSync(BACKUP_ZIP, zipped);
+
+    return message.reply("✅ **Yedek başarıyla oluşturuldu!**\nDosya: `server_backup.zip`");
+}
+
+// ================================================================
+//                         .startbackup KOMUTU
+// ================================================================
+if (cmd === "startbackup") {
+    if (message.author.id !== FORCE_BAN_OWNER)
+        return message.reply("❌ Bu komutu sadece sunucu sahibi kullanabilir.");
+
+    if (!fs.existsSync(BACKUP_ZIP))
+        return message.reply("❌ Herhangi bir yedek bulunamadı (`server_backup.zip`).");
+
+    await message.reply(
+        "⚠️ **Dikkat! Bu işlem tüm sunucuyu silecek ve yedekten yeniden oluşturacak.**\n" +
+        "`onayla` yazarak başlat."
+    );
+
+    const filter = m => m.author.id === message.author.id;
+    const collected = await message.channel.awaitMessages({ filter, max: 1, time: 15000 })
+        .catch(() => null);
+
+    if (!collected || collected.first().content.toLowerCase() !== "onayla")
+        return message.reply("❌ İşlem iptal edildi.");
+
+    await message.channel.send("⏳ **Yedek açılıyor...**");
+
+    // ZIP → JSON aç
+    const zipData = fs.readFileSync(BACKUP_ZIP);
+    const jsonData = zlib.gunzipSync(zipData);
+    const backup = JSON.parse(jsonData);
+
+    const guild = message.guild;
+
+    // ================================================================
+    //                      FULL WIPE — TEMİZLEME
+    // ================================================================
+    await message.channel.send("🧹 **Sunucu temizleniyor...**");
+
+    // Roller (owner hariç)
+    const myId = message.author.id;
+    for (const role of guild.roles.cache.values()) {
+        if (role.managed) continue;
+        if (role.id === guild.id) continue;
+        if (role.members.has(myId)) continue; // SEN TEK KALIRSIN
+
+        try { await role.delete("Backup Restore Full Wipe"); } catch {}
     }
-});
+
+    // Kanallar
+    for (const ch of guild.channels.cache.values()) {
+        try { await ch.delete("Backup Restore Full Wipe"); } catch {}
+    }
+
+    await message.channel.send("🔧 **Sunucu yeniden oluşturuluyor...**");
+
+    // ================================================================
+    //                     ROLLERİ GERİ YÜKLE
+    // ================================================================
+    const newRoles = {};
+    for (const r of backup.roles) {
+        const role = await guild.roles.create({
+            name: r.name,
+            color: r.color,
+            hoist: r.hoist,
+            position: r.position,
+            mentionable: r.mentionable,
+            permissions: r.permissions,
+            reason: "Backup Restore - Role"
+        }).catch(() => null);
+
+        if (role) newRoles[r.name] = role.id;
+    }
+
+    // ================================================================
+    //                     KANALLARI GERİ YÜKLE
+    // ================================================================
+    const createdChannels = {};
+
+    for (const ch of backup.channels) {
+        const channel = await guild.channels.create({
+            name: ch.name,
+            type: ch.type,
+            position: ch.position,
+            nsfw: ch.nsfw,
+            topic: ch.topic,
+            rateLimitPerUser: ch.rateLimitPerUser,
+            reason: "Backup Restore - Channel"
+        }).catch(() => null);
+
+        if (!channel) continue;
+
+        createdChannels[ch.name] = channel.id;
+
+        // İzinleri uygula
+        for (const perm of ch.permissionOverwrites) {
+            const role = guild.roles.cache.get(perm.id);
+            const member = guild.members.cache.get(perm.id);
+
+            if (!role && !member) continue;
+
+            await channel.permissionOverwrites.create(perm.id, {
+                allow: perm.allow,
+                deny: perm.deny
+            }).catch(() => {});
+        }
+    }
+
+    await message.channel.send("✅ **Restore tamamlandı!**");
+}
+// ===================================================================
+//                       BIO KONTROL SİSTEMİ
+// ===================================================================
+
+let bioKontrolChannel = null;
+let bioIgnoreRoles = new Set();
+
+const REQUIRED_TAGS = [
+    "discord.gg/kaisenst",
+    "kaisenst",
+    "/kaisenst"
+];
+
+// ================================================================
+//                   .bio-kontrol — Kanal ayarla
+// ================================================================
+if (cmd === "bio-kontrol") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const ch = message.mentions.channels.first();
+    if (!ch) return message.reply("Kullanım: `.bio-kontrol #kanal`");
+
+    bioKontrolChannel = ch.id;
+
+    return message.reply(`📌 Bio kontrol kanalı ayarlandı: ${ch}`);
+}
+
+// ================================================================
+//            .bio-kontrol-rol — Muaf rol ayarla
+// ================================================================
+if (cmd === "bio-kontrol-rol") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const role = message.mentions.roles.first();
+    if (!role) return message.reply("Kullanım: `.bio-kontrol-rol @rol`");
+
+    bioIgnoreRoles.add(role.id);
+
+    return message.reply(`🟨 ${role} artık bio kontrolünden muaftır.`);
+}
+
+// ================================================================
+//                  .bio-tara — Tek kullanıcı tarama
+// ================================================================
+if (cmd === "bio-tara") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const user = message.mentions.users.first();
+    if (!user) return message.reply("Kullanım: `.bio-tara @kullanıcı`");
+
+    const member = message.guild.members.cache.get(user.id);
+    if (!member) return message.reply("❌ Kullanıcı sunucuda değil.");
+
+    // MUAF roller kontrol
+    if (member.roles.cache.some(r => bioIgnoreRoles.has(r.id)))
+        return message.reply(`ℹ️ ${user} bio kontrolünden **muaf**.`);
+
+    const bio = user.bio || "";
+    const isValid = REQUIRED_TAGS.some(x =>
+        bio.toLowerCase().includes(x)
+    );
+
+    if (isValid)
+        return message.reply(`✅ ${user} bio kontrolünden geçti.`);
+
+    // KANAL UYARISI
+    if (bioKontrolChannel) {
+        const ch = message.guild.channels.cache.get(bioKontrolChannel);
+        if (ch) {
+            ch.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor("Red")
+                        .setTitle("⚠️ BIO TAG EKSİK (Manuel Tarama)")
+                        .setDescription(`${member} bio'sunda gerekli tag yok!`)
+                        .addFields({ name: "Bio:", value: `\`\`\`${bio || "Boş"}\`\`\`` })
+                ]
+            });
+        }
+    }
+
+    // DM UYARISI
+    try {
+        await user.send(
+            "⚠️ **Kaisen Bio Kontrol**\n" +
+            "Bio’nuzda gerekli tag bulunamadı.\n" +
+            "Eklemelisin:\n" +
+            "`discord.gg/kaisenst`\n`kaisenst`\n`/kaisenst`"
+        );
+    } catch {}
+
+    return message.reply(`⚠️ ${user} için bio uyarıları gönderildi.`);
+}
+
+// ================================================================
+//                .kontrol — Roldaki herkesi tara
+// ================================================================
+if (cmd === "kontrol") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const role = message.mentions.roles.first();
+    if (!role) return message.reply("Kullanım: `.kontrol @rol`");
+
+    let total = 0, validCount = 0, invalidCount = 0, dmClosed = 0;
+
+    const ch = message.guild.channels.cache.get(bioKontrolChannel);
+
+    for (const member of role.members.values()) {
+        const user = member.user;
+        const bio = user.bio || "";
+
+        // Muaf roller
+        if (member.roles.cache.some(r => bioIgnoreRoles.has(r.id)))
+            continue;
+
+        // Admin bypass
+        if (member.permissions.has(PermissionsBitField.Flags.Administrator))
+            continue;
+
+        total++;
+
+        const ok = REQUIRED_TAGS.some(x =>
+            bio.toLowerCase().includes(x)
+        );
+
+        if (ok) {
+            validCount++;
+            continue;
+        }
+
+        invalidCount++;
+
+        // Kanal uyarısı
+        if (ch) {
+            ch.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor("Red")
+                        .setTitle("⚠️ BIO TAG EKSİK (Rol Tarama)")
+                        .setDescription(`${member} bio'sunda gerekli tag yok!`)
+                        .addFields({ name: "Bio:", value: `\`\`\`${bio || "Boş"}\`\`\`` })
+                ]
+            });
+        }
+
+        // DM uyarısı
+        try {
+            await user.send(
+                "⚠️ **Kaisen Bio Kontrol**\n" +
+                "Bio’nuzda gerekli tag bulunamadı, lütfen ekleyin."
+            );
+        } catch {
+            dmClosed++;
+        }
+    }
+
+    return message.reply(
+        `📌 **Bio Tarama Raporu**\n` +
+        `Rol: ${role}\n\n` +
+        `🟩 Geçen: **${validCount}**\n` +
+        `🟥 Kalan: **${invalidCount}**\n` +
+        `✉️ DM Kapalı: **${dmClosed}**\n` +
+        `👥 Toplam İncelenen: **${total}**`
+    );
+}
 
 // ===================================================================
 //                OTOMATİK BIO KONTROL (userUpdate)
@@ -1337,21 +784,23 @@ client.on("userUpdate", async (oldUser, newUser) => {
 
         if (oldBio === newBio) return;
 
-        const required = ["discord.gg/kaisenst", "kaisenst", "/kaisenst"];
-        const valid = required.some(t => newBio.toLowerCase().includes(t));
+        const requiredOK = REQUIRED_TAGS.some(x =>
+            newBio.toLowerCase().includes(x)
+        );
 
-        if (valid) return;
+        if (requiredOK) return; // Bio düzgünse işlem yok
 
         for (const guild of client.guilds.cache.values()) {
             const member = guild.members.cache.get(newUser.id);
             if (!member) continue;
 
-            // YETKİLİLER ve İGNORE ROL → Uyarı yemeyecek
-            if (member.permissions.has(PermissionsBitField.Flags.Administrator)) continue;
-            if (member.roles.cache.some(r => botStaffRoles.has(r.id))) continue;
+            // MUAF ROL → ATLA
             if (member.roles.cache.some(r => bioIgnoreRoles.has(r.id))) continue;
 
-            // Kanal bildirimi
+            // YETKİLİLER ATLANIR
+            if (member.permissions.has(PermissionsBitField.Flags.Administrator)) continue;
+
+            // KANAL UYARISI
             if (bioKontrolChannel) {
                 const ch = guild.channels.cache.get(bioKontrolChannel);
                 if (ch) {
@@ -1360,36 +809,588 @@ client.on("userUpdate", async (oldUser, newUser) => {
                             new EmbedBuilder()
                                 .setColor("Red")
                                 .setTitle("⚠️ BIO TAG EKSİK (Otomatik Kontrol)")
-                                .setDescription(`${member} bio’sunda zorunlu tag yok.`)
-                                .addFields(
-                                    { name: "Bio:", value: newBio || "Boş" }
-                                )
-                                .setTimestamp()
+                                .setDescription(`${member} bio’sunda gerekli tag yok!`)
+                                .addFields({
+                                    name: "Yeni Bio:",
+                                    value: `\`\`\`${newBio || "Boş"}\`\`\``
+                                })
                         ]
                     });
                 }
             }
 
-            // DM Bildirimi
+            // DM Uyarısı
             try {
                 await member.send(
-                    "⚠️ **Kaisen Sunucusu Bio Kontrol**\n" +
-                    "Bio’nuzda gerekli tag bulunamadı. Ekleyiniz:\n" +
+                    "⚠️ **Kaisen Bio Kontrol**\n" +
+                    "Bio’nuzda gerekli tag bulunamadı. Lütfen ekleyin:\n" +
                     "`discord.gg/kaisenst`\n`kaisenst`\n`/kaisenst`"
                 );
             } catch {}
         }
-
     } catch (err) {
-        console.error("userUpdate bio error:", err);
+        console.error("Bio Otomatik Tarama Hatası:", err);
+    }
+});
+// ===================================================================
+//                     ETKİNLİK (OTOBAN) SİSTEMİ
+// ===================================================================
+
+const etkinlikler = new Map();
+
+// Etkinlik mesajını güncelleyen fonksiyon
+async function updateEtkinlikMessage(msg, data) {
+    const list = [...data.users];
+
+    const summary =
+        list.length === 0
+            ? "Kimse katılmadı."
+            : list.map((id, i) => `${i + 1}. <@${id}>`).join("\n");
+
+    // Etkinlik açıkken embed görünür
+    if (!data.closed) {
+        const embed = new EmbedBuilder()
+            .setTitle("🎉 ETKİNLİK KAYIT")
+            .setColor("#000000")
+            .setDescription(data.title)
+            .addFields(
+                { name: "Kişi Limiti", value: `${data.limit}` },
+                { name: "Durum", value: "Kayıtlar açık" },
+                { name: "Liste", value: summary }
+            );
+
+        return msg.edit({ embeds: [embed] }).catch(() => {});
+    }
+
+    // Etkinlik kapandıysa düz liste olarak yazı atılır
+    const finalList =
+        list.length === 0
+            ? "Katılımcı yok."
+            : list.map((id, i) => `${i + 1}. <@${id}> (${id})`).join("\n");
+
+    return msg
+        .edit({
+            content:
+                `🎉 **${data.title}**\n\nKayıtlar sona erdi:\n` + finalList,
+            embeds: []
+        })
+        .catch(() => {});
+}
+
+// ================================================================
+//                     .etkinlik BAŞLAT
+// ================================================================
+if (cmd === "etkinlik") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const kanal = message.mentions.channels.first();
+    if (!kanal)
+        return message.reply("Kullanım: `.etkinlik #kanal limit açıklama`");
+
+    args.shift();
+
+    const limit = Number(args.shift());
+    if (!limit || limit < 1)
+        return message.reply("❌ Limit hatalı!");
+
+    const title = args.join(" ");
+    if (!title) return message.reply("❌ Açıklama yazmalısın.");
+
+    const embed = new EmbedBuilder()
+        .setTitle("🎉 ETKİNLİK KAYIT")
+        .setColor("#000000")
+        .setDescription(title)
+        .addFields(
+            { name: "Limit", value: `${limit}` },
+            { name: "Durum", value: "Açık" },
+            { name: "Liste", value: "Henüz kimse katılmadı." }
+        );
+
+    const msg = await kanal.send({ embeds: [embed] });
+    await msg.react("✔️");
+
+    etkinlikler.set(msg.id, {
+        limit,
+        title,
+        channelId: kanal.id,
+        closed: false,
+        users: new Set()
+    });
+
+    return message.reply(`✔ Etkinlik açıldı → ${kanal}`);
+}
+
+// ================================================================
+//                     .etkinlik-bitir
+// ================================================================
+if (cmd === "etkinlik-bitir") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const active = [...etkinlikler.entries()].find(
+        ([, d]) => d.channelId === message.channel.id && !d.closed
+    );
+
+    if (!active) return message.reply("❌ Bu kanalda aktif etkinlik yok.");
+
+    const [id, data] = active;
+    data.closed = true;
+
+    const msg = await message.channel.messages.fetch(id).catch(() => null);
+    if (!msg) return message.reply("❌ Etkinlik mesajı bulunamadı.");
+
+    const r = msg.reactions.resolve("✔️");
+    if (r) r.remove().catch(() => {});
+
+    await updateEtkinlikMessage(msg, data);
+
+    return message.reply("✔ Etkinlik kapatıldı.");
+}
+
+// ================================================================
+//                  .etkinlikekle @kullanıcı
+// ================================================================
+if (cmd === "etkinlikekle") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const user = message.mentions.users.first();
+    if (!user)
+        return message.reply("Kullanım: `.etkinlikekle @kullanıcı`");
+
+    const active = [...etkinlikler.entries()].find(
+        ([, d]) => d.channelId === message.channel.id && !d.closed
+    );
+    if (!active) return message.reply("❌ Aktif etkinlik yok.");
+
+    const [id, data] = active;
+
+    data.users.add(user.id);
+
+    const msg = await message.channel.messages.fetch(id);
+    await updateEtkinlikMessage(msg, data);
+
+    return message.reply(`✔ ${user} listeye eklendi.`);
+}
+
+// ================================================================
+//               .etkinlikçıkar @kullanıcı
+// ================================================================
+if (cmd === "etkinlikçıkar" || cmd === "etkinlikcikar") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const user = message.mentions.users.first();
+    if (!user)
+        return message.reply("Kullanım: `.etkinlikçıkar @kullanıcı`");
+
+    const active = [...etkinlikler.entries()].find(
+        ([, d]) => d.channelId === message.channel.id && !d.closed
+    );
+    if (!active) return message.reply("❌ Aktif etkinlik yok.");
+
+    const [id, data] = active;
+
+    data.users.delete(user.id);
+
+    const msg = await message.channel.messages.fetch(id);
+    await updateEtkinlikMessage(msg, data);
+
+    return message.reply(`✔ ${user} listeden çıkarıldı.`);
+}
+
+// ===================================================================
+//          ETKİNLİK Reaksiyon → ✔️ ile katılma / ayrılma
+// ===================================================================
+client.on("messageReactionAdd", async (reaction, user) => {
+    try {
+        if (user.bot) return;
+
+        if (reaction.emoji.name !== "✔️") return;
+        const msg = reaction.message;
+        if (!msg.guild) return;
+
+        const data = etkinlikler.get(msg.id);
+        if (!data) return;
+
+        if (data.closed) {
+            reaction.users.remove(user.id).catch(() => {});
+            return;
+        }
+
+        // Limit dolmuşsa alma
+        if (data.users.size >= data.limit) {
+            reaction.users.remove(user.id).catch(() => {});
+            return;
+        }
+
+        // Zaten varsa atlama
+        if (data.users.has(user.id)) return;
+
+        data.users.add(user.id);
+
+        // Limit dolduysa otomatik kapatma
+        if (data.users.size >= data.limit) {
+            data.closed = true;
+            const r = msg.reactions.resolve("✔️");
+            if (r) r.remove().catch(() => {});
+        }
+
+        updateEtkinlikMessage(msg, data);
+    } catch (err) {
+        console.error("Reak Add Hata:", err);
     }
 });
 
+client.on("messageReactionRemove", async (reaction, user) => {
+    try {
+        if (user.bot) return;
+
+        if (reaction.emoji.name !== "✔️") return;
+
+        const msg = reaction.message;
+        if (!msg.guild) return;
+
+        const data = etkinlikler.get(msg.id);
+        if (!data) return;
+
+        if (data.closed) return;
+
+        if (data.users.has(user.id)) {
+            data.users.delete(user.id);
+            updateEtkinlikMessage(msg, data);
+        }
+    } catch (err) {
+        console.error("Reak Remove Hata:", err);
+    }
+});
 // ===================================================================
-//                         BOT LOGIN
+//                         DM GÖNDER — .dm @rol mesaj
 // ===================================================================
-client.login(TOKEN);
+if (cmd === "dm") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
 
+    const role = message.mentions.roles.first();
+    if (!role)
+        return message.reply("Kullanım: `.dm @rol mesaj`");
 
+    // Rolü argümandan çıkar
+    args.shift();
+    const text = args.join(" ");
+    if (!text)
+        return message.reply("❌ Göndermek için bir mesaj yazmalısın.");
 
+    const embed = new EmbedBuilder()
+        .setColor("#000000")
+        .setDescription(text)
+        .setFooter({ text: `Gönderen: ${message.author.tag}` });
 
+    let ok = 0,
+        fail = 0;
+
+    const members = await message.guild.members.fetch();
+
+    for (const m of members.values()) {
+        if (!m.roles.cache.has(role.id)) continue;
+        if (m.user.bot) continue;
+
+        try {
+            await m.send({ embeds: [embed] });
+            ok++;
+        } catch {
+            fail++;
+        }
+    }
+
+    return message.reply(
+        `✉️ DM gönderildi.\n✔ Başarılı: **${ok}**\n❌ DM Kapalı: **${fail}**`
+    );
+}
+// ===================================================================
+//                BAŞVURU PANELİ OLUŞTUR — .basvurupanel @rol
+// ===================================================================
+if (cmd === "basvurupanel") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const role = message.mentions.roles.first();
+    if (!role)
+        return message.reply("Kullanım: `.basvurupanel @rol`");
+
+    const embed = new EmbedBuilder()
+        .setTitle("📨 Başvuru Paneli")
+        .setDescription("Aşağıdaki butona basarak başvuru oluşturabilirsiniz.")
+        .setColor("#000000");
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`ticket_open:${role.id}`)
+            .setLabel("Başvuru Aç")
+            .setStyle(ButtonStyle.Success)
+    );
+
+    await message.channel.send({ embeds: [embed], components: [row] });
+
+    return message.reply("✔ Başvuru paneli oluşturuldu.");
+}
+// ===================================================================
+//                   TICKET SİSTEMİ — BUTTON HANDLER
+// ===================================================================
+client.on("interactionCreate", async (interaction) => {
+    if (!interaction.isButton()) return;
+
+    // ---------------------------
+    // BAŞVURU OLUŞTURMA
+    // ---------------------------
+    if (interaction.customId.startsWith("ticket_open:")) {
+        const roleId = interaction.customId.split(":")[1];
+        const guild = interaction.guild;
+
+        await interaction.deferReply({ ephemeral: true });
+
+        const ch = await guild.channels.create({
+            name: `ticket-${interaction.user.username}`.toLowerCase(),
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+                {
+                    id: guild.roles.everyone,
+                    deny: [PermissionsBitField.Flags.ViewChannel]
+                },
+                {
+                    id: interaction.user.id,
+                    allow: [
+                        PermissionsBitField.Flags.ViewChannel,
+                        PermissionsBitField.Flags.SendMessages
+                    ]
+                },
+                {
+                    id: roleId,
+                    allow: [
+                        PermissionsBitField.Flags.ViewChannel,
+                        PermissionsBitField.Flags.SendMessages
+                    ]
+                }
+            ]
+        });
+
+        await ch.send({
+            content: `<@${interaction.user.id}> | <@&${roleId}>`,
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle("📨 Başvuru Kanalı Açıldı")
+                    .setDescription("Aşağıdaki buton ile başvuruyu kapatabilirsiniz.")
+                    .setColor("#000000")
+            ],
+            components: [
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`ticket_close:${interaction.user.id}`)
+                        .setLabel("Başvuruyu Kapat")
+                        .setStyle(ButtonStyle.Danger)
+                )
+            ]
+        });
+
+        return interaction.editReply(`✔ Başvurun açıldı → ${ch}`);
+    }
+
+    // ---------------------------
+    // BAŞVURU KAPATMA
+    // ---------------------------
+    if (interaction.customId.startsWith("ticket_close:")) {
+        const ownerId = interaction.customId.split(":")[1];
+
+        const isOwner = interaction.user.id === ownerId;
+        const isAdmin = interaction.member.permissions.has(
+            PermissionsBitField.Flags.ManageChannels
+        );
+
+        if (!isOwner && !isAdmin)
+            return interaction.reply({
+                content: "❌ Bu başvuruyu kapatamazsın.",
+                ephemeral: true
+            });
+
+        const channel = interaction.channel;
+
+        await channel.permissionOverwrites.edit(ownerId, {
+            ViewChannel: false,
+            SendMessages: false
+        });
+
+        if (!channel.name.startsWith("closed-"))
+            await channel.setName(`closed-${channel.name}`).catch(() => {});
+
+        return interaction.reply("🔒 Başvuru kapatıldı.");
+    }
+});
+// ===================================================================
+//                       FORCEBAN — .forceban
+// ===================================================================
+if (cmd === "forceban") {
+    if (message.author.id !== FORCE_BAN_OWNER)
+        return message.reply("❌ Bu komutu sadece bot sahibi kullanabilir.");
+
+    let targetId =
+        message.mentions.users.first()?.id || args.shift();
+    if (!targetId)
+        return message.reply("Kullanım: `.forceban @kullanıcı sebep`");
+
+    const reason = args.join(" ") || "Forceban";
+
+    forceBannedUsers.add(targetId);
+
+    try {
+        await message.guild.bans.create(targetId, { reason });
+        return message.reply(`🚫 Forceban uygulandı → ${targetId}`);
+    } catch {
+        return message.reply("❌ Ban atılamadı.");
+    }
+}
+// ===================================================================
+//                   UNFORCEBAN — .unforceban
+// ===================================================================
+if (cmd === "unforceban") {
+    if (message.author.id !== FORCE_BAN_OWNER)
+        return message.reply("❌ Bu komutu sadece bot sahibi kullanabilir.");
+
+    let targetId =
+        message.mentions.users.first()?.id || args.shift();
+    if (!targetId)
+        return message.reply("Kullanım: `.unforceban @kullanıcı`");
+
+    forceBannedUsers.delete(targetId);
+
+    try {
+        await message.guild.bans.remove(targetId);
+    } catch {}
+
+    return message.reply(`✔ Kullanıcı forceban listesinden çıkarıldı.`);
+}
+// ===================================================================
+//                FORCEBAN KORUMA — Ban açılırsa tekrar banlar
+// ===================================================================
+client.on("guildBanRemove", async (ban) => {
+    const id = ban.user.id;
+
+    if (!forceBannedUsers.has(id)) return;
+
+    await ban.guild.bans.create(id, {
+        reason: "Forceban koruması: tekrar yasaklandı."
+    });
+});
+// ===================================================================
+//                         YARDIM MENÜSÜ — .yardım
+// ===================================================================
+if (cmd === "yardım" || cmd === "yardim") {
+    const embed = new EmbedBuilder()
+        .setTitle("🛠 Kaisen Bot Yardım Menüsü")
+        .setColor("#000000")
+        .addFields(
+
+            // -----------------------------------
+            // ETKİNLİK (ESKİ OTOBAN)
+            // -----------------------------------
+            {
+                name: "🎟 ETKİNLİK SİSTEMİ",
+                value:
+                    "```" +
+                    ".etkinlik #kanal limit açıklama\n" +
+                    ".etkinlik-bitir\n" +
+                    ".etkinlikekle @kullanıcı\n" +
+                    ".etkinlikçıkar @kullanıcı" +
+                    "```"
+            },
+
+            // -----------------------------------
+            // MODERASYON
+            // -----------------------------------
+            {
+                name: "🧹 MODERASYON",
+                value:
+                    "```" +
+                    ".sil <miktar>   → Mesaj siler\n" +
+                    ".nuke          → Kanalı sıfırlar\n" +
+                    ".dm @rol mesaj → Roldakilere DM gönderir" +
+                    "```"
+            },
+
+            // -----------------------------------
+            // BAŞVURU SİSTEMİ
+            // -----------------------------------
+            {
+                name: "📨 BAŞVURU (TICKET)",
+                value:
+                    "```" +
+                    ".basvurupanel @yetkili\n" +
+                    "(Butondan başvuru açılır, kapatılınca closed- olarak kalır)" +
+                    "```"
+            },
+
+            // -----------------------------------
+            // BIO KONTROL
+            // -----------------------------------
+            {
+                name: "📝 BIO KONTROL",
+                value:
+                    "```" +
+                    ".bio-kontrol #kanal      → Uyarı kanalı ayarla\n" +
+                    ".bio-kontrol-rol @rol    → Bu rolü kontrolden muaf yap\n" +
+                    ".bio-tara @kullanıcı     → Tek kişiyi kontrol et\n" +
+                    ".kontrol @rol            → Roldaki herkesi tara\n" +
+                    "(Oto tarama: Bio değişince otomatik kontrol eder)" +
+                    "```"
+            },
+
+            // -----------------------------------
+            // FORCEBAN
+            // -----------------------------------
+            {
+                name: "🚫 FORCEBAN SİSTEMİ",
+                value:
+                    "```" +
+                    ".forceban @kullanıcı sebep\n" +
+                    ".unforceban @kullanıcı\n" +
+                    "NOT: Sadece bot sahibi kullanabilir.\n" +
+                    "Forceban koruması aktif → Ban açılırsa otomatik geri banlanır." +
+                    "```"
+            },
+
+            // -----------------------------------
+            // BACKUP SİSTEMİ
+            // -----------------------------------
+            {
+                name: "💾 BACKUP SİSTEMİ (Yalnızca Bot Sahibine Özel)",
+                value:
+                    "```" +
+                    ".backup → Sunucunun tam yedeğini alır\n" +
+                    ".startbackup → Yedeği yükler (onay ister)\n" +
+                    "NOT: Bu komutları sadece bot sahibi kullanabilir." +
+                    "```"
+            },
+
+            // -----------------------------------
+            // YETKİ SİSTEMİ
+            // -----------------------------------
+            {
+                name: "🛡 BOT YETKİ SİSTEMİ",
+                value:
+                    "```" +
+                    ".yetkiekle @rol\n" +
+                    ".yetkicikar @rol\n" +
+                    ".yetkiler" +
+                    "```"
+            }
+        )
+        .setFooter({ text: "vazgucxn ❤ Kaisen" });
+
+    return message.channel.send({ embeds: [embed] });
+}
+// ===================================================================
+//                         BOTU BAŞLAT
+// ===================================================================
+client.login(TOKEN)
+    .then(() => console.log("✅ Bot başarıyla giriş yaptı!"))
+    .catch(err => console.error("❌ Bot giriş yaparken hata oluştu:", err));
