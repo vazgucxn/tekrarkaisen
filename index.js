@@ -230,42 +230,75 @@ client.on("messageCreate", async (message) => {
         }
 
         // ----------------- .yardım -----------------
-        if (cmd === "yardım" || cmd === "yardim") {
-            const embed = new EmbedBuilder()
-                .setTitle("🛠 Kaisen Bot Yardım Menüsü")
-                .setColor("#000000")
-                .addFields(
-                    {
-                        name: "🎟 OTOBAN",
-                        value:
-                            "`" +
-                            ".otoban #kanal limit açıklama\n" +
-                            ".otoban-bitir\n" +
-                            ".otobanekle @kullanıcı\n" +
-                            ".otobançıkar @kullanıcı" +
-                            "`",
-                    },
-                    {
-                        name: "🧹 Moderasyon",
-                        value: "`" + ".sil <miktar>\n.nuke" + "`",
-                    },
-                    {
-                        name: "💌 DM",
-                        value: "`" + ".dm @rol mesaj" + "`",
-                    },
-                    {
-                        name: "📨 Başvuru",
-                        value: "`" + ".basvurupanel @YetkiliRol" + "`",
-                    },
-                    {
-                        name: "🚫 ForceBan (sadece owner)",
-                        value: "`" + ".forceban @kullanıcı/id sebep\n.unforceban @kullanıcı/id" + "`",
-                    }
-                )
-                .setFooter({ text: "vazgucxn ❤ Kaisen" });
+       if (cmd === "yardım" || cmd === "yardim") {
+    const embed = new EmbedBuilder()
+        .setTitle("🛠 Kaisen Bot Yardım Menüsü")
+        .setColor("#000000")
+        .addFields(
+            {
+                name: "🎟 OTOBAN Sistem",
+                value:
+                    "`" +
+                    ".otoban #kanal limit açıklama\n" +
+                    ".otoban-bitir\n" +
+                    ".otobanekle @kullanıcı\n" +
+                    ".otobançıkar @kullanıcı" +
+                    "`"
+            },
+            {
+                name: "🧹 Moderasyon",
+                value:
+                    "`" +
+                    ".sil <miktar>  → Mesaj siler\n" +
+                    ".nuke          → Kanalı sıfırlar" +
+                    "`"
+            },
+            {
+                name: "💌 DM Sistemi",
+                value:
+                    "`" +
+                    ".dm @rol mesaj → O roldeki herkese DM atar" +
+                    "`"
+            },
+            {
+                name: "📨 Başvuru Sistemi",
+                value:
+                    "`" +
+                    ".basvurupanel @yetkili → Başvuru paneli oluşturur" +
+                    "`"
+            },
+            {
+                name: "🚫 Forceban Sistemi",
+                value:
+                    "`" +
+                    ".forceban @kullanıcı/id sebep\n" +
+                    ".unforceban @kullanıcı/id" +
+                    "`\n(Sadece <@" + FORCE_BAN_OWNER + "> kullanabilir)"
+            },
+            {
+                name: "🛡 Yetki Sistemi",
+                value:
+                    "`" +
+                    ".yetkiekle @rol\n" +
+                    ".yetkicikar @rol\n" +
+                    ".yetkiler" +
+                    "`"
+            },
+            {
+                name: "🛑 Guard Sistemleri",
+                value:
+                    "• Reklam Engelleme (otomatik)\n" +
+                    "• Link koruması\n" +
+                    "• Invite koruması\n" +
+                    "• Mesaj düzenlemede reklam engeli\n" +
+                    "• ForceBan koruması (unbanlansa bile tekrar banlar)"
+            }
+        )
+        .setFooter({ text: "vazgucxn ❤ Kaisen" });
 
-            return message.channel.send({ embeds: [embed] });
-        }
+    return message.channel.send({ embeds: [embed] });
+}
+
 
         // ----------------- Yetki Komutları -----------------
         if (cmd === "yetkiekle") {
@@ -711,3 +744,4 @@ client.on("guildBanRemove", async (ban) => {
 //                          BOTU BAŞLAT
 // ===================================================================
 client.login(TOKEN);
+
