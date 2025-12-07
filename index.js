@@ -192,6 +192,377 @@ client.on("messageUpdate", async (_oldMsg, newMsg) => {
     checkAd(newMsg);
 });
 
+// ================================================================
+//                  BACKUP GERİ YÜKLE — .startbackup
+// ================================================================
+if (cmd === "startbackup") {
+    if (message.author.id !== FORCE_BAN_OWNER)
+        return message.reply("❌ Bu komutu sadece sunucu sahibi kullanabilir.");
+
+    const fs = require("fs");
+    const path = require("path");
+    const zlib = require("zlib");
+
+    const zipFilePath = path.join(__dirname, "server_backup.zip");
+    const jsonPath = path.join(__dirname, "server_backup.json");
+
+    if (!fs.existsSync(zipFilePath))
+        return message.reply("❌ Yedek ZIP dosyası bulunamadı!");
+
+    await message.reply("⚠️ **Dikkat!** Sunucu birazdan yedeğe göre yeniden oluşturulacak.\n`onayla` yazarak işlemi başlat.");
+
+    const filter = m => m.author.id === message.author.id;
+    const collected = await message.channel.awaitMessages({ filter, max: 1, time: 20000 }).catch(() => null);
+
+    if (!collected || collected.first().content.toLowerCase() !== "onayla")
+        return message.reply("❌ İşlem iptal edildi.");
+
+    await message.channel.send("⏳ ZIP açılıyor...");
+
+    try {
+        // ZIP → JSON aç
+        const zipData = fs.readFileSync(zipFilePath);
+        const jsonData = zlib.gunzipSync(zipData);
+        fs.writeFileSync(jsonPath, jsonData);
+
+        const backup = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+
+        await message.channel.send("🧹 Sunucu temizleniyor...");
+
+        // ====================================================
+        //                     SUNUCU TEMİZLE
+        // ====================================================
+        // Kanallar sil
+        for (const ch of message.guild.channels.cache.values()) {
+            try { await ch.delete("Backup Restore"); } catch {}
+        }
+
+        // Roller sil (EN ÜST ROL → EN ALT ROL olarak silinir)
+        const sortedRoles = message.guild.roles.cache
+            .filter(r => r.id !== message.guild.id)
+            .sort((a, b) => b.position - a.position);
+
+        for (const role of sortedRoles.values()) {
+            try { await role.delete("Backup Restore"); } catch {}
+        }
+
+        await message.channel.send("📦 Roller & Kanallar silindi. Yeniden oluşturuluyor...");
+
+        // ====================================================
+        //                    ROLLERİ YENİ OLUŞTUR
+        // ====================================================
+        const createdRoles = {};
+
+        for (const r of backup.roles) {
+            try {
+                const newRole = await message.guild.roles.create({
+                    name: r.name,
+                    color: r.color,
+                    hoist: r.hoist,
+                    mentionable: r.mentionable,
+                    permissions: BigInt(r.permissions),
+                    reason: "Backup Restore"
+                });
+
+                createdRoles[r.id] = newRole.id;
+
+                await new Promise(res => setTimeout(res, 300)); // rate limit koruması
+
+            } catch (err) {
+                console.error("ROL OLUŞTURMA HATASI:", err);
+            }
+        }
+
+        await message.channel.send("📌 Roller oluşturuldu. Kanallar oluşturuluyor...");
+
+        // ====================================================
+        //                KANALLARI YENİ OLUŞTUR
+        // ====================================================
+        const createdChannels = {};
+
+        // İlk kategoriler
+        for (const ch of backup.channels.filter(c => c.type === 4)) {
+            try {
+                const newCat = await message.guild.channels.create({
+                    name: ch.name,
+                    type: 4,
+                    position: ch.position
+                });
+
+                createdChannels[ch.id] = newCat.id;
+            } catch {}
+        }
+
+        // Normal kanallar
+        for (const ch of backup.channels.filter(c => c.type !== 4)) {
+            try {
+                const parent = ch.parent ? createdChannels[ch.parent] : null;
+
+                const newCh = await message.guild.channels.create({
+                    name: ch.name,
+                    type: ch.type,
+                    nsfw: ch.nsfw,
+                    topic: ch.topic,
+                    rateLimitPerUser: ch.rateLimit,
+                    parent: parent || undefined,
+                    position: ch.position
+                });
+
+                createdChannels[ch.id] = newCh.id;
+
+            } catch (err) {
+                console.error("KANAL OLUŞTURMA HATASI:", err);
+            }
+        }
+
+        await message.channel.send("🔐 Kanal izinleri uygulanıyor...");
+
+        // ====================================================
+        //                PERMISSION OVERWRITES
+        // ====================================================
+        for (const oldCh of backup.channels) {
+            const newChId = createdChannels[oldCh.id];
+            if (!newChId) continue;
+
+            const newCh = message.guild.channels.cache.get(newChId);
+            if (!newCh) continue;
+
+            for (const perm of oldCh.permissionOverwrites) {
+                const targetId = createdRoles[perm.id] || perm.id;
+
+                try {
+                    await newCh.permissionOverwrites.create(targetId, {
+                        allow: BigInt(perm.allow),
+                        deny: BigInt(perm.deny)
+                    });
+                } catch {}
+            }
+
+            await new Promise(res => setTimeout(res, 150));
+        }
+
+        await message.channel.send("🎉 **Backup tamamlandı! Sunucu başarıyla geri yüklendi.**");
+
+    } catch (err) {
+        console.error("RESTORE ERROR:", err);
+        return message.channel.send("❌ Restore sırasında hata oluştu!");
+    }
+}
+
+// ================================================================
+//                       BACKUP OLUŞTUR (ZIP) — .backup
+// ================================================================
+if (cmd === "backup") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    const msg = await message.reply("⏳ Sunucu yedekleniyor, lütfen bekleyin...");
+
+    const guild = message.guild;
+    const fs = require("fs");
+    const path = require("path");
+    const zlib = require("zlib");
+
+    try {
+        // ============= ROLLERİ YEDEKLE =============
+        const rolesBackup = guild.roles.cache
+            .filter(r => r.id !== guild.id)
+            .sort((a, b) => b.position - a.position)
+            .map(r => ({
+                id: r.id,
+                name: r.name,
+                color: r.color,
+                hoist: r.hoist,
+                position: r.position,
+                permissions: r.permissions.bitfield,
+                mentionable: r.mentionable
+            }));
+
+        // ============= KANAL + PERM YEDEĞİ =============
+        const channelsBackup = [];
+
+        const sorted = guild.channels.cache.sort((a, b) => a.rawPosition - b.rawPosition);
+
+        sorted.forEach(ch => {
+            const base = {
+                id: ch.id,
+                name: ch.name,
+                type: ch.type,
+                parent: ch.parent?.id || null,
+                position: ch.rawPosition,
+                nsfw: ch.nsfw || false,
+                topic: ch.topic || null,
+                rateLimit: ch.rateLimitPerUser || 0,
+                permissionOverwrites: []
+            };
+
+            ch.permissionOverwrites.cache.forEach(ow => {
+                base.permissionOverwrites.push({
+                    id: ow.id,
+                    allow: ow.allow.bitfield,
+                    deny: ow.deny.bitfield,
+                    type: ow.type
+                });
+            });
+
+            channelsBackup.push(base);
+        });
+
+        // ============= YEDEK JSON DOSYASI =============
+        const backupData = {
+            server: {
+                id: guild.id,
+                name: guild.name,
+                created: guild.createdTimestamp,
+                icon: guild.iconURL({ dynamic: true })
+            },
+            roles: rolesBackup,
+            channels: channelsBackup,
+            time: Date.now()
+        };
+
+        const json = JSON.stringify(backupData, null, 2);
+
+        // Geçici JSON dosyası
+        const tempJson = path.join(__dirname, "server_backup.json");
+        fs.writeFileSync(tempJson, json);
+
+        // ============= ZIP OLUŞTUR =============
+        const zipPath = path.join(__dirname, "server_backup.zip");
+        const zip = zlib.gzipSync(fs.readFileSync(tempJson));
+
+        fs.writeFileSync(zipPath, zip);
+
+        // JSON dosyasını gereksiz olduğu için sil
+        fs.unlinkSync(tempJson);
+
+        // ============= DM İLE GÖNDER =============
+        try {
+            await message.author.send({
+                content: "📦 **Sunucu Yedeği Hazır (ZIP Formatında)!**",
+                files: [zipPath]
+            });
+
+            await msg.edit("✔ Yedek başarıyla oluşturuldu ve **DM'den ZIP olarak gönderildi!**");
+
+        } catch (dmErr) {
+            await msg.edit("⚠️ DM kapalı! ZIP dosyası buraya gönderiliyor...");
+
+            try {
+                await message.channel.send({
+                    content: "📦 Yedek ZIP dosyan:",
+                    files: [zipPath]
+                });
+            } catch {
+                return msg.edit("❌ ZIP dosyası gönderilemedi! (Dosya çok büyük olabilir)");
+            }
+        }
+
+        // ZIP dosyasını sil
+        fs.unlinkSync(zipPath);
+
+    } catch (err) {
+        console.error("BACKUP ERROR:", err);
+        return msg.edit("❌ Backup alınırken hata oluştu!");
+    }
+}
+
+// ================================================================
+//                       BACKUP OLUŞTUR (.backup)
+// ================================================================
+if (cmd === "backup") {
+    if (!hasBotPermission(message.member))
+        return message.reply("❌ Yetkin yok.");
+
+    message.reply("⏳ Sunucu yedekleniyor, lütfen bekleyin...");
+
+    const guild = message.guild;
+
+    // ============= ROLLERİ YEDEKLE =============
+    const rolesBackup = guild.roles.cache
+        .filter(r => r.id !== guild.id)
+        .sort((a, b) => b.position - a.position)
+        .map(r => ({
+            id: r.id,
+            name: r.name,
+            color: r.color,
+            hoist: r.hoist,
+            position: r.position,
+            permissions: r.permissions.bitfield,
+            mentionable: r.mentionable
+        }));
+
+    // ============= KATEGORİ + KANAL YEDEĞİ =============
+    const channelsBackup = [];
+
+    const sorted = guild.channels.cache.sort((a, b) => a.rawPosition - b.rawPosition);
+
+    sorted.forEach(ch => {
+        const base = {
+            id: ch.id,
+            name: ch.name,
+            type: ch.type,
+            parent: ch.parent?.id || null,
+            position: ch.rawPosition,
+            nsfw: ch.nsfw || false,
+            topic: ch.topic || null,
+            rateLimit: ch.rateLimitPerUser || 0,
+            permissionOverwrites: []
+        };
+
+        ch.permissionOverwrites.cache.forEach(ow => {
+            base.permissionOverwrites.push({
+                id: ow.id,
+                allow: ow.allow.bitfield,
+                deny: ow.deny.bitfield,
+                type: ow.type
+            });
+        });
+
+        channelsBackup.push(base);
+    });
+
+    // ============= YEDEK DOSYASI =============
+    const backupData = {
+        server: {
+            id: guild.id,
+            name: guild.name,
+            created: guild.createdTimestamp,
+            icon: guild.iconURL({ dynamic: true })
+        },
+        roles: rolesBackup,
+        channels: channelsBackup,
+        time: Date.now()
+    };
+
+    // JSON’a çevir
+    const json = JSON.stringify(backupData, null, 2);
+
+    // Geçici dosya yolunu belirle
+    const fs = require("fs");
+    const path = require("path");
+    const tempPath = path.join(__dirname, "server_backup.json");
+
+    fs.writeFileSync(tempPath, json);
+
+    // DM olarak gönder
+    try {
+        await message.author.send({
+            content: "📦 **Sunucu Yedeği Hazır!**\n`server_backup.json` dosyan aşağıdadır:",
+            files: [tempPath]
+        });
+
+        message.channel.send("✔ **Yedek başarıyla oluşturuldu ve DM’den gönderildi!**");
+
+        // Dosyayı sil
+        fs.unlinkSync(tempPath);
+
+    } catch (err) {
+        console.error(err);
+        message.reply("❌ DM kapalı olduğu için yedek gönderilemedi!");
+    }
+}
+
 // ===================================================================
 //                       PREFIX KOMUTLARI (TEK EVENT)
 // ===================================================================
@@ -986,3 +1357,4 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
