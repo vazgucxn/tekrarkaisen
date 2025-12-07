@@ -212,7 +212,11 @@ if (cmd === "startbackup") {
     await message.reply("⚠️ **Dikkat!** Sunucu birazdan yedeğe göre yeniden oluşturulacak.\n`onayla` yazarak işlemi başlat.");
 
     const filter = m => m.author.id === message.author.id;
-    const collected = await message.channel.awaitMessages({ filter, max: 1, time: 20000 }).catch(() => null);
+    const collected = await message.channel.awaitMessages({
+        filter,
+        max: 1,
+        time: 20000
+    }).catch(() => null);
 
     if (!collected || collected.first().content.toLowerCase() !== "onayla")
         return message.reply("❌ İşlem iptal edildi.");
@@ -220,7 +224,6 @@ if (cmd === "startbackup") {
     await message.channel.send("⏳ ZIP açılıyor...");
 
     try {
-        // ZIP → JSON aç
         const zipData = fs.readFileSync(zipFilePath);
         const jsonData = zlib.gunzipSync(zipData);
         fs.writeFileSync(jsonPath, jsonData);
@@ -228,6 +231,14 @@ if (cmd === "startbackup") {
         const backup = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
 
         await message.channel.send("🧹 Sunucu temizleniyor...");
+        
+        // Buraya sunucuyu temizleme ve backup'tan yeniden oluşturma kodlarını ekleyeceğiz
+
+    } catch (err) {
+        console.error(err);
+        return message.reply("❌ Backup yüklenirken hata oluştu!");
+    }
+}
 
         // ====================================================
         //                     SUNUCU TEMİZLE
@@ -1357,4 +1368,5 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
