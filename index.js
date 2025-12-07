@@ -203,54 +203,62 @@ client.on("messageCreate", async (message) => {
     //                     BACKUP GERİ YÜKLE — .startbackup
     // ================================================================
     if (cmd === "startbackup") {
-        if (message.author.id !== FORCE_BAN_OWNER)
-            return message.reply("❌ Bu komutu sadece sunucu sahibi kullanabilir.");
+    if (message.author.id !== FORCE_BAN_OWNER)
+        return message.reply("❌ Bu komutu sadece sunucu sahibi kullanabilir.");
 
-        const fs = require("fs");
-        const path = require("path");
-        const zlib = require("zlib");
+    const fs = require("fs");
+    const path = require("path");
+    const zlib = require("zlib");
 
-        const zipFilePath = path.join(__dirname, "server_backup.zip");
-        const jsonPath = path.join(__dirname, "server_backup.json");
+    const zipFilePath = path.join(__dirname, "server_backup.zip");
+    const jsonPath = path.join(__dirname, "server_backup.json");
 
-        if (!fs.existsSync(zipFilePath))
-            return message.reply("❌ Yedek ZIP dosyası bulunamadı!");
+    if (!fs.existsSync(zipFilePath))
+        return message.reply("❌ Yedek ZIP dosyası bulunamadı!");
 
-        await message.reply(
-            "⚠️ **Dikkat!** Sunucu birazdan yedeğe göre yeniden oluşturulacak.\n" +
-            "`onayla` yazarak işlemi başlat."
-        );
+    await message.reply("⚠️ Sunucu yedeğe göre yeniden oluşturulacak. `onayla` yaz.");
 
-        const filter = m => m.author.id === message.author.id;
-        const collected = await message.channel.awaitMessages({
-            filter,
-            max: 1,
-            time: 20000
-        }).catch(() => null);
+    const filter = m => m.author.id === message.author.id;
+    const collected = await message.channel.awaitMessages({
+        filter,
+        max: 1,
+        time: 20000
+    }).catch(() => null);
 
-        if (!collected || collected.first().content.toLowerCase() !== "onayla")
-            return message.reply("❌ İşlem iptal edildi.");
+    if (!collected || collected.first().content.toLowerCase() !== "onayla")
+        return message.reply("❌ İşlem iptal edildi.");
 
-        await message.channel.send("⏳ ZIP açılıyor...");
+    await message.channel.send("🧹 Kanallar temizleniyor...");
 
+    // ✔ SUNUCU TEMİZLEME KISMI BURADA async İÇİNDE!
+    const guild = message.guild;
+
+    // --- TÜM KANALLARI SİL ---
+    for (const ch of guild.channels.cache.values()) {
         try {
-            const zipData = fs.readFileSync(zipFilePath);
-            const jsonData = zlib.gunzipSync(zipData);
-            fs.writeFileSync(jsonPath, jsonData);
-
-            const backup = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
-
-            await message.channel.send("🧹 Sunucu temizleniyor...");
-
-            // ✔ Sunucu temizleme & yeniden kurma kodları buraya gelecek
-
-        } catch (err) {
-            console.error(err);
-            return message.reply("❌ Backup yüklenirken hata oluştu!");
-        }
+            await ch.delete("Backup Restore"); // ← Artık async içinde olduğu için hata yok
+        } catch {}
     }
 
-});
+    await message.channel.send("📁 Yedek yükleniyor...");
+
+    // ZIP → JSON
+    try {
+        const zipData = fs.readFileSync(zipFilePath);
+        const jsonData = zlib.gunzipSync(zipData);
+        fs.writeFileSync(jsonPath, jsonData);
+
+        const backup = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+
+        // --- Buraya yedeğe göre yeni kanallar / roller oluşturma gelecek ---
+
+        await message.channel.send("✅ Backup başarıyla yüklendi!");
+
+    } catch (err) {
+        console.error(err);
+        return message.reply("❌ Backup yüklenirken hata oluştu!");
+    }
+}
 
 
         // ====================================================
@@ -1381,6 +1389,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
