@@ -45,11 +45,11 @@ const client = new Client({
 });
 
 // ===================== Global Veriler =====================
-const otobanEvents = new Map();              // otoban sistem veri
-const forceBannedUsers = new Set();          // forceban kayıtları
-const botStaffRoles = new Set();             // ek yetkili roller
-let bioKontrolChannel = null;                // bio uyarı kanal ID
-let bioKontrolIgnoreRoles = [];              // bio kontrol dışı roller
+const otobanEvents = new Map();      // otoban verisi
+const forceBannedUsers = new Set();  // forceban kayıtları
+const botStaffRoles = new Set();     // ek yetkili roller
+let bioKontrolChannel = null;        // bio uyarı kanalı (tek sunucu)
+let bioIgnoreRoles = new Set();      // bio kontrol dışı roller
 
 // ===================== Yardımcı Fonksiyonlar =====================
 
@@ -126,6 +126,7 @@ client.once("ready", () => {
         status: "online"
     });
 });
+
 // ===================================================================
 //                      GUARD: REKLAM ENGEL
 // ===================================================================
@@ -176,7 +177,7 @@ async function checkAd(message) {
     }
 }
 
-// Mesaj atıldığında reklam kontrolü
+// Reklam kontrol eventi
 client.on("messageCreate", checkAd);
 
 // Mesaj düzenlendiğinde tekrar reklam kontrolü
@@ -190,8 +191,9 @@ client.on("messageUpdate", async (_oldMsg, newMsg) => {
     }
     checkAd(newMsg);
 });
+
 // ===================================================================
-//                       PREFIX KOMUTLARI
+//                       PREFIX KOMUTLARI (TEK EVENT)
 // ===================================================================
 client.on("messageCreate", async (message) => {
     try {
@@ -297,8 +299,7 @@ client.on("messageCreate", async (message) => {
             const role = message.mentions.roles.first();
             if (!role) return message.reply("Kullanım: `.bio-kontrol-rol @rol`");
 
-            if (!bioKontrolIgnoreRoles.includes(role.id))
-                bioKontrolIgnoreRoles.push(role.id);
+            bioIgnoreRoles.add(role.id);
 
             return message.reply(`🟨 ${role} artık bio kontrolünden muaftır.`);
         }
@@ -320,7 +321,7 @@ client.on("messageCreate", async (message) => {
             const required = ["discord.gg/kaisenst", "kaisenst", "/kaisenst"];
 
             // Muaf rol kontrolü
-            if (member.roles.cache.some(r => bioKontrolIgnoreRoles.includes(r.id)))
+            if (member.roles.cache.some(r => bioIgnoreRoles.has(r.id)))
                 return message.reply("ℹ️ Bu kullanıcı bio kontrolünden muaftır.");
 
             const isValid = required.some(tag =>
@@ -341,7 +342,7 @@ client.on("messageCreate", async (message) => {
                                 .setTitle("⚠️ Bio Tag Eksik!")
                                 .setDescription(`${user} bio’sunda tag bulunamadı!`)
                                 .addFields(
-                                    { name: "Bio:", value: `\`\`\`${bio || "Boş"}\`\`\`` }
+                                    { name: "Bio:", value: bio || "Boş" }
                                 )
                         ]
                     });
@@ -351,7 +352,8 @@ client.on("messageCreate", async (message) => {
             // DM uyarısı
             try {
                 await user.send(
-                    "⚠️ **Bio kontrol uyarısı:** Bio’nuzda Kaisen tagleri bulunmuyor!"
+                    "⚠️ **Bio kontrol uyarısı:** Bio’nuzda Kaisen tagleri bulunmuyor!\n" +
+                    "Ekleyiniz: `discord.gg/kaisenst`, `kaisenst` veya `/kaisenst`"
                 );
             } catch {}
 
@@ -372,7 +374,9 @@ client.on("messageCreate", async (message) => {
 
             let total = 0, passed = 0, failed = 0, dmClosed = 0;
 
-            const logCh = message.guild.channels.cache.get(bioKontrolChannel);
+            const logCh = bioKontrolChannel
+                ? message.guild.channels.cache.get(bioKontrolChannel)
+                : null;
 
             for (const member of role.members.values()) {
                 const user = member.user;
@@ -382,7 +386,7 @@ client.on("messageCreate", async (message) => {
                 if (
                     member.permissions.has(PermissionsBitField.Flags.Administrator) ||
                     member.roles.cache.some(r => botStaffRoles.has(r.id)) ||
-                    member.roles.cache.some(r => bioKontrolIgnoreRoles.includes(r.id))
+                    member.roles.cache.some(r => bioIgnoreRoles.has(r.id))
                 ) continue;
 
                 total++;
@@ -407,7 +411,7 @@ client.on("messageCreate", async (message) => {
                                 .setTitle("⚠️ Bio Eksik (Toplu Kontrol)")
                                 .setDescription(`${member} bio’sunda tag yok!`)
                                 .addFields(
-                                    { name: "Bio:", value: `\`\`\`${bio || "Boş"}\`\`\`` }
+                                    { name: "Bio:", value: bio || "Boş" }
                                 )
                         ]
                     });
@@ -415,7 +419,11 @@ client.on("messageCreate", async (message) => {
 
                 // DM
                 try {
-                    await user.send("⚠️ Bio’nuzda gerekli tagler bulunamadı!");
+                    await user.send(
+                        "⚠️ **Bio Kontrol**\n" +
+                        "Bio’nuzda gerekli tagler bulunamadı.\n" +
+                        "Ekleyiniz: `discord.gg/kaisenst`, `kaisenst` veya `/kaisenst`"
+                    );
                 } catch {
                     dmClosed++;
                 }
@@ -637,7 +645,7 @@ client.on("messageCreate", async (message) => {
                 );
 
             const msg = await channel.send({ embeds: [embed] });
-            await msg.react("✔️");
+            await msg.react("✅");
 
             otobanEvents.set(msg.id, {
                 max: limit,
@@ -665,7 +673,7 @@ client.on("messageCreate", async (message) => {
 
             data.closed = true;
 
-            const r = msg.reactions.resolve("✔️");
+            const r = msg.reactions.resolve("✅");
             if (r) await r.remove().catch(() => {});
 
             await updateOtobanMessage(msg, data);
@@ -690,7 +698,7 @@ client.on("messageCreate", async (message) => {
             data.participants.add(user.id);
 
             const msg = await message.channel.messages.fetch(msgId);
-            updateOtobanMessage(msg, data);
+            await updateOtobanMessage(msg, data);
 
             return message.reply(`✔ ${user} listeye eklendi.`);
         }
@@ -709,7 +717,7 @@ client.on("messageCreate", async (message) => {
             data.participants.delete(user.id);
 
             const msg = await message.channel.messages.fetch(msgId);
-            updateOtobanMessage(msg, data);
+            await updateOtobanMessage(msg, data);
 
             return message.reply(`✔ ${user} listeden çıkarıldı.`);
         }
@@ -718,6 +726,7 @@ client.on("messageCreate", async (message) => {
         console.error("Prefix komut hatası:", err);
     }
 });
+
 // ===================================================================
 //              BAŞVURU BUTTON SİSTEMİ (Başvuru Aç / Kapat)
 // ===================================================================
@@ -823,9 +832,8 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
-
 // ===================================================================
-//              OTOBAN REAKSİYON SİSTEMİ (✔️ ile kayıt)
+//              OTOBAN REAKSİYON SİSTEMİ (✅ ile kayıt)
 // ===================================================================
 client.on("messageReactionAdd", async (reaction, user) => {
     try {
@@ -837,7 +845,7 @@ client.on("messageReactionAdd", async (reaction, user) => {
 
         const msg = reaction.message;
         if (!msg.guild) return;
-        if (reaction.emoji.name !== "✔️") return;
+        if (reaction.emoji.name !== "✅") return;
 
         const data = otobanEvents.get(msg.id);
         if (!data) return;
@@ -863,7 +871,7 @@ client.on("messageReactionAdd", async (reaction, user) => {
         if (data.participants.size >= data.max) {
             data.closed = true;
 
-            const r = msg.reactions.resolve("✔️");
+            const r = msg.reactions.resolve("✅");
             if (r) r.remove().catch(() => {});
         }
 
@@ -883,7 +891,7 @@ client.on("messageReactionRemove", async (reaction, user) => {
 
         const msg = reaction.message;
         if (!msg.guild) return;
-        if (reaction.emoji.name !== "✔️") return;
+        if (reaction.emoji.name !== "✅") return;
 
         const data = otobanEvents.get(msg.id);
         if (!data) return;
@@ -897,7 +905,6 @@ client.on("messageReactionRemove", async (reaction, user) => {
         console.error("messageReactionRemove error:", err);
     }
 });
-
 
 // ===================================================================
 //                      FORCEBAN KORUMA
@@ -916,167 +923,6 @@ client.on("guildBanRemove", async (ban) => {
         console.error("guildBanRemove error:", err);
     }
 });
-// ================================================================
-//                     BIO KONTROL AYARLARI
-// ================================================================
-let bioKontrolChannel = null;
-let bioIgnoreRoles = new Set(); // Bio kontrolünden muaf roller
-
-// ================================================================
-//                 MANUEL BIO TARAMA KOMUTLARI
-// ================================================================
-client.on("messageCreate", async (message) => {
-    try {
-        if (!message.guild || message.author.bot) return;
-        if (!message.content.startsWith(PREFIX)) return;
-
-        const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
-        const cmd = args.shift()?.toLowerCase();
-
-        // ------------------------------------------------------------------
-        //            .bio-kontrol #kanal
-        // ------------------------------------------------------------------
-        if (cmd === "bio-kontrol") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Bu komut için yetkin yok.");
-
-            const ch = message.mentions.channels.first();
-            if (!ch) return message.reply("Kullanım: `.bio-kontrol #kanal`");
-
-            bioKontrolChannel = ch.id;
-
-            return message.reply(`✅ Bio kontrol kanalın ayarlandı: ${ch}`);
-        }
-
-        // ------------------------------------------------------------------
-        //            .bio-kontrol-rol @rol
-        // ------------------------------------------------------------------
-        if (cmd === "bio-kontrol-rol") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Bu komut için yetkin yok.");
-
-            const role = message.mentions.roles.first();
-            if (!role) return message.reply("Kullanım: `.bio-kontrol-rol @rol`");
-
-            bioIgnoreRoles.add(role.id);
-
-            return message.reply(`🛡 ${role} bio kontrolünden muaf yapıldı.`);
-        }
-
-        // ------------------------------------------------------------------
-        //            .bio-tara @kullanıcı
-        // ------------------------------------------------------------------
-        if (cmd === "bio-tara") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const user = message.mentions.users.first();
-            if (!user) return message.reply("Kullanım: `.bio-tara @kullanıcı`");
-
-            const member = await message.guild.members.fetch(user.id).catch(() => null);
-            if (!member) return message.reply("❌ Kullanıcı bulunamadı.");
-
-            const bio = user.bio || "";
-
-            const required = ["discord.gg/kaisenst", "kaisenst", "/kaisenst"];
-            const valid = required.some(x => bio.toLowerCase().includes(x.toLowerCase()));
-
-            if (valid)
-                return message.reply(`✅ ${user} bio kontrolünden geçti.`);
-
-            // Uyarı embed (kanala)
-            if (bioKontrolChannel) {
-                const ch = message.guild.channels.cache.get(bioKontrolChannel);
-                if (ch) {
-                    ch.send({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor("Red")
-                                .setTitle("⚠️ BIO TAG EKSİK (Manuel Tarama)")
-                                .setDescription(`${member} bio’sunda gerekli tag yok.`)
-                                .addFields(
-                                    { name: "Bio:", value: `\`\`\`${bio || "Boş"}\`\`\`` },
-                                    { name: "Gerekli:", value: "`discord.gg/kaisenst`\n`kaisenst`\n`/kaisenst`" }
-                                )
-                        ]
-                    });
-                }
-            }
-
-            // DM uyarı
-            try {
-                await user.send(
-                    "⚠️ **Kaisen Bio Kontrol**\n" +
-                    "Profil bio’nuzda gerekli tag bulunamadı!\n\n" +
-                    "Eklemelisin:\n`discord.gg/kaisenst`\n`kaisenst`\n`/kaisenst`"
-                );
-            } catch {}
-
-            return message.reply(`⚠️ ${user} tag eksik, uyarı gönderildi.`);
-        }
-
-        // ------------------------------------------------------------------
-        //            .kontrol @rol  → Roldeki herkesin biosunu tarar
-        // ------------------------------------------------------------------
-        if (cmd === "kontrol") {
-            if (!hasBotPermission(message.member))
-                return message.reply("❌ Yetkin yok.");
-
-            const role = message.mentions.roles.first();
-            if (!role) return message.reply("Kullanım: `.kontrol @rol`");
-
-            const members = role.members;
-            if (members.size === 0)
-                return message.reply("❌ Bu rolde kullanıcı yok.");
-
-            let eksik = 0;
-
-            for (const member of members.values()) {
-                const bio = member.user.bio || "";
-                const required = ["discord.gg/kaisenst", "kaisenst", "/kaisenst"];
-                const valid = required.some(x => bio.toLowerCase().includes(x.toLowerCase()));
-
-                if (!valid) {
-                    eksik++;
-
-                    // Kanal uyarısı
-                    if (bioKontrolChannel) {
-                        const ch = message.guild.channels.cache.get(bioKontrolChannel);
-                        if (ch) {
-                            ch.send({
-                                embeds: [
-                                    new EmbedBuilder()
-                                        .setColor("Red")
-                                        .setTitle("⚠️ BIO TAG EKSİK (Rol Tarama)")
-                                        .setDescription(`${member} bio’sunda tag bulunamadı.`)
-                                        .addFields(
-                                            { name: "Bio:", value: `\`\`\`${bio || "Boş"}\`\`\`` },
-                                            { name: "Gerekli:", value: "`discord.gg/kaisenst`\n`kaisenst`\n`/kaisenst`" }
-                                        )
-                                ]
-                            });
-                        }
-                    }
-
-                    // DM uyarı
-                    try {
-                        await member.send(
-                            "⚠️ **Kaisen Bio Kontrol**\n" +
-                            "Profil bio’nuzda gerekli tag bulunamadı.\n" +
-                            "Lütfen ekleyin."
-                        );
-                    } catch {}
-                }
-            }
-
-            return message.reply(`⌛ Rol taraması tamamlandı. Eksik bio: **${eksik} kişi**`);
-        }
-
-    } catch (err) {
-        console.error("Bio manuel komut hatası:", err);
-    }
-});
-
 
 // ===================================================================
 //                OTOMATİK BIO KONTROL (userUpdate)
@@ -1113,7 +959,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
                                 .setTitle("⚠️ BIO TAG EKSİK (Otomatik Kontrol)")
                                 .setDescription(`${member} bio’sunda zorunlu tag yok.`)
                                 .addFields(
-                                    { name: "Bio:", value: `\`\`\`${newBio || "Boş"}\`\`\`` }
+                                    { name: "Bio:", value: newBio || "Boş" }
                                 )
                                 .setTimestamp()
                         ]
