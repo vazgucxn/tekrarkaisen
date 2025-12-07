@@ -14,7 +14,7 @@ const {
 const express = require("express");
 
 // ----------- Ayarlar -----------
-const PREFIX = "."; // .otoban, .dm, .basvurupanel
+const PREFIX = "."; // .otoban, .dm, .basvurupanel, .forceban, .yardım vs
 
 // ------------- Render için mini web server -------------
 const app = express();
@@ -45,24 +45,96 @@ const client = new Client({
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.MessageContent, // prefix komutlar için
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildBans,
     ],
     partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
-// ------------- OTOBAN VERİLERİ -------------
+// ------------- GLOBAL VERİLER -------------
 /*
-Map: key = messageId
-value = {
+otobanEvents: Map<messageId, {
     max: number,
     title: string,
     participants: Set<userId>,
     closed: boolean,
     channelId: string,
-    ownerId: string,
-}
+    ownerId: string
+}>
 */
 const otobanEvents = new Map();
+
+/*
+forceBannedUsers: Set<userId>  -> force ban takibi
+*/
+const forceBannedUsers = new Set();
+
+/*
+botStaffRoles: Set<roleId>  -> özel bot yetkisi olan roller
+*/
+const botStaffRoles = new Set();
+
+// ------------- HELPER FONKSİYONLAR -------------
+
+function hasBotPermission(member) {
+    if (!member) return false;
+    if (member.permissions.has(PermissionsBitField.Flags.Administrator)) return true;
+    if (member.permissions.has(PermissionsBitField.Flags.ManageGuild)) return true;
+    for (const roleId of botStaffRoles) {
+        if (member.roles.cache.has(roleId)) return true;
+    }
+    return false;
+}
+
+function findActiveOtobanInChannel(channelId) {
+    let lastEntry = null;
+    for (const [msgId, data] of otobanEvents.entries()) {
+        if (data.channelId === channelId && !data.closed) {
+            lastEntry = { msgId, data };
+        }
+    }
+    return lastEntry;
+}
+
+// ---------------- OTOBAN MESAJ GÜNCELLEYİCİ ----------------
+async function updateOtobanMessage(message, data) {
+    const arr = Array.from(data.participants);
+
+    const embedListText =
+        arr.length === 0
+            ? "Henüz kimse katılmadı."
+            : arr.map((id, index) => `${index + 1}. <@${id}>`).join("\n");
+
+    const finalListText =
+        arr.length === 0
+            ? "Katılımcı yok."
+            : arr.map((id, index) => `${index + 1}- <@${id}> ( ${id} )`).join("\n");
+
+    // Katılım açıkken -> EMBED
+    if (!data.closed) {
+        const embed = new EmbedBuilder()
+            .setTitle("🎟️ OTOBAN / ETKİNLİK")
+            .setDescription(data.title)
+            .addFields(
+                { name: "Kişi Sınırı", value: `${data.max}`, inline: true },
+                { name: "Durum", value: "Kayıtlar açık.", inline: true },
+                { name: "Liste", value: embedListText },
+            )
+            .setColor(0x00ffff)
+            .setFooter({ text: "Kaisen OtoBan Sistemi" })
+            .setTimestamp();
+
+        return message.edit({ content: null, embeds: [embed] }).catch(() => {});
+    }
+
+    // Kapandıysa -> DÜZ YAZI
+    const finalText =
+        `${data.title} için katılımlar sona erdi.\n` +
+        `Katılımcılar aşağıdaki listede gösteriliyor...\n\n` +
+        finalListText;
+
+    return message.edit({ embeds: [], content: finalText }).catch(() => {});
+}
 
 // ------------- READY -------------
 client.once("ready", () => {
@@ -93,13 +165,127 @@ client.on("messageCreate", async (message) => {
         const cmd = args.shift()?.toLowerCase();
 
         // ------------------------------------------------
+        // .yardım
+        // ------------------------------------------------
+        if (cmd === "yardım" || cmd === "yardim") {
+            const embed = new EmbedBuilder()
+                .setTitle("🛠 Kaisen Bot Yardım Menüsü")
+                .setDescription("Aşağıda botun tüm komutlarını ve açıklamalarını bulabilirsin.")
+                .setColor(0x5865f2)
+                .addFields(
+                    {
+                        name: "🎟 OTOBAN SİSTEMİ",
+                        value:
+                            "`" +
+                            [
+                                ".otoban #kanal kişi_sayısı açıklama",
+                                ".otoban-bitir",
+                                ".otobanekle @kullanıcı",
+                                ".otobançıkar @kullanıcı",
+                            ].join("`\n`") +
+                            "`",
+                    },
+                    {
+                        name: "💌 DM SİSTEMİ",
+                        value: "`" + ".dm @rol mesaj" + "`",
+                    },
+                    {
+                        name: "📨 BAŞVURU SİSTEMİ",
+                        value: "`" + ".basvurupanel @YetkiliRol" + "`",
+                    },
+                    {
+                        name: "🚫 FORCE BAN SİSTEMİ",
+                        value:
+                            "`" +
+                            [
+                                ".forceban @kullanıcı/id sebep",
+                                ".unforceban @kullanıcı/id",
+                            ].join("`\n`") +
+                            "`",
+                    },
+                    {
+                        name: "🛡 YETKİ SİSTEMİ",
+                        value:
+                            "`" +
+                            [
+                                ".yetkiekle @rol",
+                                ".yetkicikar @rol",
+                                ".yetkiler",
+                            ].join("`\n`") +
+                            "`",
+                    }
+                )
+                .setFooter({ text: "vazgucxn ❤ Kaisen" })
+                .setTimestamp();
+
+            return message.channel.send({ embeds: [embed] });
+        }
+
+        // ------------------------------------------------
+        // .yetkiekle @rol
+        // ------------------------------------------------
+        if (cmd === "yetkiekle") {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                return message.reply("❌ Bu komutu sadece **Yönetici** kullanabilir.");
+            }
+
+            const role = message.mentions.roles.first();
+            if (!role) {
+                return message.reply("❌ Kullanım: `.yetkiekle @rol`");
+            }
+
+            botStaffRoles.add(role.id);
+            return message.reply(`✅ ${role} rolüne bot yetkisi verildi.`);
+        }
+
+        // ------------------------------------------------
+        // .yetkicikar @rol
+        // ------------------------------------------------
+        if (cmd === "yetkicikar") {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                return message.reply("❌ Bu komutu sadece **Yönetici** kullanabilir.");
+            }
+
+            const role = message.mentions.roles.first();
+            if (!role) {
+                return message.reply("❌ Kullanım: `.yetkicikar @rol`");
+            }
+
+            botStaffRoles.delete(role.id);
+            return message.reply(`✅ ${role} rolünden bot yetkisi kaldırıldı.`);
+        }
+
+        // ------------------------------------------------
+        // .yetkiler
+        // ------------------------------------------------
+        if (cmd === "yetkiler") {
+            if (botStaffRoles.size === 0) {
+                return message.reply("ℹ Şu anda ekstra bot yetkisi verilmiş bir rol yok. Sadece Admin / Sunucu Yöneticisi botun yönetim komutlarını kullanabilir.");
+            }
+            const names = botStaffRoles
+                .map((id) => {
+                    const r = message.guild.roles.cache.get(id);
+                    return r ? r.toString() : `\`${id}\``;
+                })
+                .join("\n");
+
+            return message.reply(`🛡 Bot yetkili rolleri:\n${names}`);
+        }
+
+        // Aşağıdaki komutlar için bot yetkisi gereksin
+        const needsPerm = ["otoban", "otoban-bitir", "otobanekle", "otobançıkar", "otobancikar", "dm", "basvurupanel", "forceban", "unforceban"];
+        if (needsPerm.includes(cmd) && !hasBotPermission(message.member)) {
+            return message.reply("❌ Bu komutu kullanmak için bot yetkisine sahip olmalısın. (Admin / Manage Server / bot yetkili rol)");
+        }
+
+        // ------------------------------------------------
         // .otoban #kanal kişi_sayısı açıklama
         // ------------------------------------------------
         if (cmd === "otoban") {
             const channel = message.mentions.channels.first();
 
             if (!channel || channel.type !== ChannelType.GuildText) {
-                return message.reply("❌ Kullanım bu aq: `.otoban #kanal kişi_sayısı açıklama`");
+                return message.reply("❌ Kullanım: `.otoban #kanal kişi_sayısı açıklama`");
             }
 
             // mention'ı args listesinden çıkar
@@ -109,26 +295,26 @@ client.on("messageCreate", async (message) => {
             const max = Number(maxStr);
             if (!maxStr || isNaN(max) || max < 1) {
                 return message.reply(
-                    "❌ Kişi sayısını doğru giriniz aq. Örn: `.otoban #kanal 20 redzone etkinliği`"
+                    "❌ Kişi sayısını doğru gir. Örn: `.otoban #kanal 20 redzone etkinliği`"
                 );
             }
 
             const title = args.join(" ");
             if (!title) {
-                return message.reply("açıklama ya etkinlik adı yarram");
+                return message.reply("❌ Bir açıklama / etkinlik adı girmen gerekiyor.");
             }
 
             // Katılım açıkken EMBED
             const embed = new EmbedBuilder()
-                .setTitle("💎 OTOBAN / ETKİNLİK")
+                .setTitle("🎟️ OTOBAN / ETKİNLİK")
                 .setDescription(title)
                 .addFields(
                     { name: "Kişi Sınırı", value: `${max}`, inline: true },
                     { name: "Durum", value: "Kayıtlar açık.", inline: true },
                     { name: "Liste", value: "Henüz kimse katılmadı." },
                 )
-                .setColor(0x000000) // siyah
-                .setFooter({ text: "Kaisen Otoban Sistemi" })
+                .setColor(0x00ffff)
+                .setFooter({ text: "Kaisen OtoBan Sistemi" })
                 .setTimestamp();
 
             const msg = await channel.send({ embeds: [embed] });
@@ -143,20 +329,109 @@ client.on("messageCreate", async (message) => {
                 ownerId: message.author.id,
             });
 
-            return message.reply(`✅ Otoban mesajı ${channel} kanalına gönderildi.`);
+            return message.reply(`✅ Oto-ban mesajı ${channel} kanalına gönderildi.`);
+        }
+
+        // ------------------------------------------------
+        // .otoban-bitir
+        // ------------------------------------------------
+        if (cmd === "otoban-bitir") {
+            const entry = findActiveOtobanInChannel(message.channel.id);
+            if (!entry) {
+                return message.reply("ℹ Bu kanalda aktif bir otoban bulunamadı.");
+            }
+            const { msgId, data } = entry;
+
+            try {
+                const msg = await message.channel.messages.fetch(msgId);
+                data.closed = true;
+                const r = msg.reactions.resolve("✅");
+                if (r) await r.remove().catch(() => {});
+                await updateOtobanMessage(msg, data);
+                return message.reply("✅ Oto-ban başarıyla kapatıldı.");
+            } catch (err) {
+                console.error(err);
+                return message.reply("❌ Oto-ban mesajı bulunamadı veya güncellenemedi.");
+            }
+        }
+
+        // ------------------------------------------------
+        // .otobanekle @kullanıcı
+        // ------------------------------------------------
+        if (cmd === "otobanekle") {
+            const entry = findActiveOtobanInChannel(message.channel.id);
+            if (!entry) {
+                return message.reply("ℹ Bu kanalda aktif bir otoban bulunamadı.");
+            }
+            const { msgId, data } = entry;
+            const user = message.mentions.users.first();
+            if (!user) {
+                return message.reply("❌ Kullanım: `.otobanekle @kullanıcı`");
+            }
+
+            if (data.closed) {
+                return message.reply("❌ Bu otoban zaten kapalı.");
+            }
+
+            if (data.participants.has(user.id)) {
+                return message.reply("ℹ Bu kullanıcı zaten listede.");
+            }
+
+            if (data.participants.size >= data.max) {
+                return message.reply("❌ Zaten maksimum kişi sayısına ulaşıldı.");
+            }
+
+            data.participants.add(user.id);
+
+            try {
+                const msg = await message.channel.messages.fetch(msgId);
+                if (data.participants.size >= data.max) {
+                    data.closed = true;
+                    const r = msg.reactions.resolve("✅");
+                    if (r) await r.remove().catch(() => {});
+                }
+                await updateOtobanMessage(msg, data);
+                return message.reply(`✅ ${user} otoban listesine eklendi.`);
+            } catch (err) {
+                console.error(err);
+                return message.reply("❌ Oto-ban mesajı güncellenirken hata oluştu.");
+            }
+        }
+
+        // ------------------------------------------------
+        // .otobançıkar / .otobancikar @kullanıcı
+        // ------------------------------------------------
+        if (cmd === "otobançıkar" || cmd === "otobancikar") {
+            const entry = findActiveOtobanInChannel(message.channel.id);
+            if (!entry) {
+                return message.reply("ℹ Bu kanalda aktif bir otoban bulunamadı.");
+            }
+            const { msgId, data } = entry;
+            const user = message.mentions.users.first();
+            if (!user) {
+                return message.reply("❌ Kullanım: `.otobançıkar @kullanıcı`");
+            }
+
+            if (!data.participants.has(user.id)) {
+                return message.reply("ℹ Bu kullanıcı listede değil.");
+            }
+
+            data.participants.delete(user.id);
+
+            try {
+                const msg = await message.channel.messages.fetch(msgId);
+                await updateOtobanMessage(msg, data);
+                return message.reply(`✅ ${user} otoban listesinden çıkarıldı.`);
+            } catch (err) {
+                console.error(err);
+                return message.reply("❌ Oto-ban mesajı güncellenirken hata oluştu.");
+            }
         }
 
         // ------------------------------------------------
         // .dm @rol mesaj
         // ------------------------------------------------
         if (cmd === "dm") {
-            if (
-                !message.member.permissions.has(PermissionsBitField.Flags.Administrator) &&
-                !message.member.permissions.has(PermissionsBitField.Flags.ManageGuild)
-            ) {
-                return message.reply("❌ Bu komutu kullanmak için yönetici yetkisine sahip olmalısın.");
-            }
-
             const role = message.mentions.roles.first();
             if (!role) {
                 return message.reply("❌ Kullanım: `.dm @rol mesaj`");
@@ -170,10 +445,9 @@ client.on("messageCreate", async (message) => {
             }
 
             await message.reply(
-                `⏳ ${role} roldeki dümbükleri çağrıyom dur pampa`
+                `⏳ ${role} rolündeki kullanıcılara DM gönderiliyor, biraz sürebilir...`
             );
 
-            // GUILD_MEMBERS intent'i açık olmalı
             const members = await message.guild.members.fetch();
             const targets = members.filter(
                 (m) => !m.user.bot && m.roles.cache.has(role.id)
@@ -207,27 +481,20 @@ client.on("messageCreate", async (message) => {
         }
 
         // ------------------------------------------------
-        // .basvurupanel @yetkiliRol
+        // .basvurupanel @YetkiliRol
         // ------------------------------------------------
         if (cmd === "basvurupanel") {
-            if (
-                !message.member.permissions.has(PermissionsBitField.Flags.Administrator) &&
-                !message.member.permissions.has(PermissionsBitField.Flags.ManageChannels)
-            ) {
-                return message.reply("❌ Başvuru paneli oluşturmak için yeterli yetkin yok.");
-            }
-
             const role = message.mentions.roles.first();
             if (!role) {
-                return message.reply("❌ Kullanım: `.basvurupanel @yetkiliRol`");
+                return message.reply("❌ Kullanım: `.basvurupanel @YetkiliRol`");
             }
 
             const embed = new EmbedBuilder()
-                .setTitle("Kaisen Ekip Başvuru")
+                .setTitle("📨 Kaisen Başvuru Sistemi")
                 .setDescription(
-                    "Ekip başvurusu için aşağıdan tike basın.\n" +
+                    "Sunucu ekibine / özel rollere başvurmak için aşağıdaki butona tıkla.\n" +
                     "Senin için özel bir kanal açılacak, soruları orada cevaplayacaksın.\n\n" +
-                    "❗ Pedsen açma kanka."
+                    "❗ Spam başvuru açmak yasaktır."
                 )
                 .setColor(0x5865f2);
 
@@ -241,13 +508,72 @@ client.on("messageCreate", async (message) => {
             await message.channel.send({ embeds: [embed], components: [row] });
             return message.reply("✅ Başvuru paneli oluşturuldu.");
         }
+
+        // ------------------------------------------------
+        // .forceban @kullanıcı/id sebep
+        // ------------------------------------------------
+        if (cmd === "forceban") {
+            let targetId;
+            const mentioned = message.mentions.users.first();
+            if (mentioned) {
+                targetId = mentioned.id;
+                args.shift(); // mention'ı kaldır
+            } else {
+                const idArg = args.shift();
+                if (!idArg) {
+                    return message.reply("❌ Kullanım: `.forceban @kullanıcı/id sebep`");
+                }
+                targetId = idArg;
+            }
+
+            const reason = args.join(" ") || "Force ban uygulandı.";
+
+            try {
+                forceBannedUsers.add(targetId);
+                await message.guild.bans.create(targetId, {
+                    reason: `ForceBan: ${reason}`,
+                });
+                return message.reply(`🚫 Force ban uygulandı. Kullanıcı ID: \`${targetId}\``);
+            } catch (err) {
+                console.error(err);
+                return message.reply("❌ Force ban uygulanırken hata oluştu. ID doğru mu?");
+            }
+        }
+
+        // ------------------------------------------------
+        // .unforceban @kullanıcı/id
+        // ------------------------------------------------
+        if (cmd === "unforceban") {
+            let targetId;
+            const mentioned = message.mentions.users.first();
+            if (mentioned) {
+                targetId = mentioned.id;
+                args.shift();
+            } else {
+                const idArg = args.shift();
+                if (!idArg) {
+                    return message.reply("❌ Kullanım: `.unforceban @kullanıcı/id`");
+                }
+                targetId = idArg;
+            }
+
+            forceBannedUsers.delete(targetId);
+
+            try {
+                await message.guild.bans.remove(targetId, "UnForceBan ile ban kaldırıldı.");
+            } catch {
+                // ban yoksa sessiz geç
+            }
+
+            return message.reply(`✅ Force ban kaldırıldı. Kullanıcı ID: \`${targetId}\``);
+        }
     } catch (err) {
         console.error("messageCreate hatası:", err);
     }
 });
 
 // ===================================================================
-//                          TICKET / BAŞVURU BUTONLARI
+//                          BAŞVURU BUTONLARI
 // ===================================================================
 client.on("interactionCreate", async (interaction) => {
     try {
@@ -318,8 +644,8 @@ client.on("interactionCreate", async (interaction) => {
                             "Merhaba, başvurun için teşekkürler.\n\n" +
                             "Lütfen aşağıdaki örneğe göre cevap ver:\n" +
                             "• Yaşın:\n" +
-                            "• Önceden oynadığın ekipler. :\n" +
-                            "• Kill pov en az 5 tane. :\n\n" +
+                            "• Deneyimin / önceki görevlerin:\n" +
+                            "• Neden seni seçelim?:\n\n" +
                             "İşin bittiğinde aşağıdaki butondan başvuruyu kapatabilirsin."
                         )
                         .setColor(0x2f3136)
@@ -455,13 +781,16 @@ client.on("messageReactionAdd", async (reaction, user) => {
         data.participants.add(user.id);
 
         // Limit dolduysa kapat
+        const msg = await reaction.message.fetch().catch(() => null);
+        if (!msg) return;
+
         if (data.participants.size >= data.max) {
             data.closed = true;
-            const r = reaction.message.reactions.resolve("✅");
+            const r = msg.reactions.resolve("✅");
             if (r) await r.remove().catch(() => {});
         }
 
-        await updateOtobanMessage(reaction.message, data);
+        await updateOtobanMessage(msg, data);
     } catch (err) {
         console.error("messageReactionAdd hatası:", err);
     }
@@ -481,54 +810,31 @@ client.on("messageReactionRemove", async (reaction, user) => {
 
         if (data.participants.has(user.id)) {
             data.participants.delete(user.id);
-            await updateOtobanMessage(reaction.message, data);
+            const msg = await reaction.message.fetch().catch(() => null);
+            if (msg) await updateOtobanMessage(msg, data);
         }
     } catch (err) {
         console.error("messageReactionRemove hatası:", err);
     }
 });
 
-// ---------------- OTOBAN MESAJ GÜNCELLEYİCİ ----------------
-async function updateOtobanMessage(message, data) {
-    const arr = Array.from(data.participants);
+// ===================================================================
+//                          FORCE BAN WATCH
+// ===================================================================
+client.on("guildBanRemove", async (ban) => {
+    try {
+        if (GUILD_ID && ban.guild.id !== GUILD_ID) return;
+        const userId = ban.user.id;
+        if (!forceBannedUsers.has(userId)) return;
 
-    const embedListText =
-        arr.length === 0
-            ? "Henüz kimse katılmadı."
-            : arr.map((id, index) => `${index + 1}. <@${id}>`).join("\n");
-
-    const finalListText =
-        arr.length === 0
-            ? "Katılımcı yok."
-            : arr.map((id, index) => `${index + 1}- <@${id}> ( ${id} )`).join("\n");
-
-    // Katılım açıkken -> EMBED
-    if (!data.closed) {
-        const embed = new EmbedBuilder()
-            .setTitle("💎 OTOBAN / ETKİNLİK")
-            .setDescription(data.title)
-            .addFields(
-                { name: "Kişi Sınırı", value: `${data.max}`, inline: true },
-                { name: "Durum", value: "Kayıtlar açık.", inline: true },
-                { name: "Liste", value: embedListText },
-            )
-            .setColor(0x000000)
-            .setFooter({ text: "Kaisen Otoban Sistemi" })
-            .setTimestamp();
-
-        return message.edit({ content: null, embeds: [embed] }).catch(() => {});
+        console.log(`ForceBan koruması: ${userId} için otomatik tekrar ban.`);
+        await ban.guild.bans.create(userId, {
+            reason: "ForceBan koruması: otomatik tekrar banlandı.",
+        });
+    } catch (err) {
+        console.error("guildBanRemove / forceban hatası:", err);
     }
-
-    // Kapandıysa -> DÜZ YAZI
-    const finalText =
-        `${data.title} için katılımlar sona erdi.\n` +
-        `Kadro aşağıdaki listede gösteriliyor...\n\n` +
-        finalListText;
-
-    return message.edit({ embeds: [], content: finalText }).catch(() => {});
-}
+});
 
 // ------------- BOTU BAŞLAT -------------
 client.login(TOKEN);
-
-
