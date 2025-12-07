@@ -877,76 +877,84 @@ async function updateEtkinlikMessage(msg, data) {
         .catch(() => {});
 }
 
-// ================================================================
-//                     .etkinlik BAŞLAT
-// ================================================================
-if (cmd === "etkinlik") {
-    if (!hasBotPermission(message.member))
-        return message.reply("❌ Yetkin yok.");
+client.on("messageCreate", async (message) => {
+    if (!message.guild || message.author.bot) return;
+    if (!message.content.startsWith(PREFIX)) return;
 
-    const kanal = message.mentions.channels.first();
-    if (!kanal)
-        return message.reply("Kullanım: `.etkinlik #kanal limit açıklama`");
+    const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
+    const cmd = args.shift()?.toLowerCase();
 
-    args.shift();
+    // ===================== ETKİNLİK OLUŞTUR =====================
+    if (cmd === "etkinlik") {
+        if (!hasBotPermission(message.member))
+            return message.reply("❌ Bu komut için yetkin yok.");
 
-    const limit = Number(args.shift());
-    if (!limit || limit < 1)
-        return message.reply("❌ Limit hatalı!");
+        const channel = message.mentions.channels.first();
+        if (!channel)
+            return message.reply("Kullanım: `.etkinlik #kanal limit açıklama`");
 
-    const title = args.join(" ");
-    if (!title) return message.reply("❌ Açıklama yazmalısın.");
+        args.shift();
+        const limit = Number(args.shift());
+        if (!limit || limit < 1)
+            return message.reply("❌ Limit sayısı hatalı.");
 
-    const embed = new EmbedBuilder()
-        .setTitle("🎉 ETKİNLİK KAYIT")
-        .setColor("#000000")
-        .setDescription(title)
-        .addFields(
-            { name: "Limit", value: `${limit}` },
-            { name: "Durum", value: "Açık" },
-            { name: "Liste", value: "Henüz kimse katılmadı." }
-        );
+        const title = args.join(" ");
+        if (!title) return message.reply("❌ Açıklama yazmalısın.");
 
-    const msg = await kanal.send({ embeds: [embed] });
-    await msg.react("✔️");
+        const embed = new EmbedBuilder()
+            .setTitle("🎟️ ETKİNLİK")
+            .setColor("#000000")
+            .setDescription(title)
+            .addFields(
+                { name: "Kişi Sınırı", value: `${limit}` },
+                { name: "Durum", value: "Açık" },
+                { name: "Katılımcılar", value: "Henüz kimse yok." }
+            );
 
-    etkinlikler.set(msg.id, {
-        limit,
-        title,
-        channelId: kanal.id,
-        closed: false,
-        users: new Set()
-    });
+        const msg = await channel.send({ embeds: [embed] });   // ✅ ARTIK HATA YOK
+        await msg.react("✔️");
 
-    return message.reply(`✔ Etkinlik açıldı → ${kanal}`);
-}
+        etkinlikEvents.set(msg.id, {
+            max: limit,
+            title,
+            participants: new Set(),
+            closed: false,
+            channelId: channel.id
+        });
 
-// ================================================================
-//                     .etkinlik-bitir
-// ================================================================
-if (cmd === "etkinlik-bitir") {
-    if (!hasBotPermission(message.member))
-        return message.reply("❌ Yetkin yok.");
+        return message.reply(`✔ Etkinlik başarıyla başladı: ${channel}`);
+    }
 
-    const active = [...etkinlikler.entries()].find(
-        ([, d]) => d.channelId === message.channel.id && !d.closed
-    );
+    // ===================== ETKİNLİK BİTİR =====================
+    if (cmd === "etkinlik-bitir") {
+        if (!hasBotPermission(message.member))
+            return message.reply("❌ Yetkin yok.");
 
-    if (!active) return message.reply("❌ Bu kanalda aktif etkinlik yok.");
+        let active = null;
+        for (const [id, data] of etkinlikEvents.entries()) {
+            if (data.channelId === message.channel.id && !data.closed) {
+                active = { id, data };
+                break;
+            }
+        }
 
-    const [id, data] = active;
-    data.closed = true;
+        if (!active)
+            return message.reply("❌ Bu kanalda açık etkinlik yok.");
 
-    const msg = await message.channel.messages.fetch(id).catch(() => null);
-    if (!msg) return message.reply("❌ Etkinlik mesajı bulunamadı.");
+        const { id, data } = active;
+        const msg = await message.channel.messages.fetch(id).catch(() => null);
 
-    const r = msg.reactions.resolve("✔️");
-    if (r) r.remove().catch(() => {});
+        if (!msg) return message.reply("❌ Etkinlik mesajı bulunamadı!");
 
-    await updateEtkinlikMessage(msg, data);
+        data.closed = true;
 
-    return message.reply("✔ Etkinlik kapatıldı.");
-}
+        const r = msg.reactions.resolve("✔️");
+        if (r) r.remove().catch(() => {});
+
+        return message.reply("✔ Etkinlik kapatıldı.");
+    }
+});
+
 
 // ================================================================
 //                  .etkinlikekle @kullanıcı
@@ -1394,3 +1402,4 @@ if (cmd === "yardım" || cmd === "yardim") {
 client.login(TOKEN)
     .then(() => console.log("✅ Bot başarıyla giriş yaptı!"))
     .catch(err => console.error("❌ Bot giriş yaparken hata oluştu:", err));
+
