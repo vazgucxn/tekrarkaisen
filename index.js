@@ -192,53 +192,66 @@ client.on("messageUpdate", async (_oldMsg, newMsg) => {
     checkAd(newMsg);
 });
 
-// ================================================================
-//                  BACKUP GERİ YÜKLE — .startbackup
-// ================================================================
-if (cmd === "startbackup") {
-    if (message.author.id !== FORCE_BAN_OWNER)
-        return message.reply("❌ Bu komutu sadece sunucu sahibi kullanabilir.");
+client.on("messageCreate", async (message) => {
+    if (!message.guild || message.author.bot) return;
+    if (!message.content.startsWith(PREFIX)) return;
 
-    const fs = require("fs");
-    const path = require("path");
-    const zlib = require("zlib");
+    const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
+    const cmd = args.shift()?.toLowerCase();
 
-    const zipFilePath = path.join(__dirname, "server_backup.zip");
-    const jsonPath = path.join(__dirname, "server_backup.json");
+    // ================================================================
+    //                     BACKUP GERİ YÜKLE — .startbackup
+    // ================================================================
+    if (cmd === "startbackup") {
+        if (message.author.id !== FORCE_BAN_OWNER)
+            return message.reply("❌ Bu komutu sadece sunucu sahibi kullanabilir.");
 
-    if (!fs.existsSync(zipFilePath))
-        return message.reply("❌ Yedek ZIP dosyası bulunamadı!");
+        const fs = require("fs");
+        const path = require("path");
+        const zlib = require("zlib");
 
-    await message.reply("⚠️ **Dikkat!** Sunucu birazdan yedeğe göre yeniden oluşturulacak.\n`onayla` yazarak işlemi başlat.");
+        const zipFilePath = path.join(__dirname, "server_backup.zip");
+        const jsonPath = path.join(__dirname, "server_backup.json");
 
-    const filter = m => m.author.id === message.author.id;
-    const collected = await message.channel.awaitMessages({
-        filter,
-        max: 1,
-        time: 20000
-    }).catch(() => null);
+        if (!fs.existsSync(zipFilePath))
+            return message.reply("❌ Yedek ZIP dosyası bulunamadı!");
 
-    if (!collected || collected.first().content.toLowerCase() !== "onayla")
-        return message.reply("❌ İşlem iptal edildi.");
+        await message.reply(
+            "⚠️ **Dikkat!** Sunucu birazdan yedeğe göre yeniden oluşturulacak.\n" +
+            "`onayla` yazarak işlemi başlat."
+        );
 
-    await message.channel.send("⏳ ZIP açılıyor...");
+        const filter = m => m.author.id === message.author.id;
+        const collected = await message.channel.awaitMessages({
+            filter,
+            max: 1,
+            time: 20000
+        }).catch(() => null);
 
-    try {
-        const zipData = fs.readFileSync(zipFilePath);
-        const jsonData = zlib.gunzipSync(zipData);
-        fs.writeFileSync(jsonPath, jsonData);
+        if (!collected || collected.first().content.toLowerCase() !== "onayla")
+            return message.reply("❌ İşlem iptal edildi.");
 
-        const backup = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+        await message.channel.send("⏳ ZIP açılıyor...");
 
-        await message.channel.send("🧹 Sunucu temizleniyor...");
-        
-        // Buraya sunucuyu temizleme ve backup'tan yeniden oluşturma kodlarını ekleyeceğiz
+        try {
+            const zipData = fs.readFileSync(zipFilePath);
+            const jsonData = zlib.gunzipSync(zipData);
+            fs.writeFileSync(jsonPath, jsonData);
 
-    } catch (err) {
-        console.error(err);
-        return message.reply("❌ Backup yüklenirken hata oluştu!");
+            const backup = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+
+            await message.channel.send("🧹 Sunucu temizleniyor...");
+
+            // ✔ Sunucu temizleme & yeniden kurma kodları buraya gelecek
+
+        } catch (err) {
+            console.error(err);
+            return message.reply("❌ Backup yüklenirken hata oluştu!");
+        }
     }
-}
+
+});
+
 
         // ====================================================
         //                     SUNUCU TEMİZLE
@@ -1368,5 +1381,6 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
