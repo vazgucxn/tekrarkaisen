@@ -513,64 +513,66 @@ client.on("messageCreate", async (message) => {
         // .forceban @kullanıcı/id sebep
         // ------------------------------------------------
         if (cmd === "forceban") {
-            let targetId;
-            const mentioned = message.mentions.users.first();
-            if (mentioned) {
-                targetId = mentioned.id;
-                args.shift(); // mention'ı kaldır
-            } else {
-                const idArg = args.shift();
-                if (!idArg) {
-                    return message.reply("❌ Kullanım: `.forceban @kullanıcı/id sebep`");
-                }
-                targetId = idArg;
-            }
 
-            const reason = args.join(" ") || "Force ban uygulandı.";
+    // SADECE BU ID KULLANABİLİR
+    if (message.author.id !== "827905938923978823") {
+        return message.reply("❌ Bu komutu sadece bot sahibi kullanabilir.");
+    }
 
-            try {
-                forceBannedUsers.add(targetId);
-                await message.guild.bans.create(targetId, {
-                    reason: `ForceBan: ${reason}`,
-                });
-                return message.reply(`🚫 Force ban uygulandı. Kullanıcı ID: \`${targetId}\``);
-            } catch (err) {
-                console.error(err);
-                return message.reply("❌ Force ban uygulanırken hata oluştu. ID doğru mu?");
-            }
-        }
+    let targetId;
+    const mentioned = message.mentions.users.first();
+    if (mentioned) {
+        targetId = mentioned.id;
+        args.shift();
+    } else {
+        const idArg = args.shift();
+        if (!idArg) return message.reply("❌ Kullanım: `.forceban @kullanıcı/id sebep`");
+        targetId = idArg;
+    }
+
+    const reason = args.join(" ") || "Force ban uygulandı.";
+
+    try {
+        forceBannedUsers.add(targetId);
+        await message.guild.bans.create(targetId, { reason: `ForceBan: ${reason}` });
+        return message.reply(`🚫 Force ban uygulandı. Kullanıcı ID: \`${targetId}\``);
+    } catch (err) {
+        console.error(err);
+        return message.reply("❌ Force ban uygulanırken hata oluştu.");
+    }
+}
+
 
         // ------------------------------------------------
         // .unforceban @kullanıcı/id
         // ------------------------------------------------
         if (cmd === "unforceban") {
-            let targetId;
-            const mentioned = message.mentions.users.first();
-            if (mentioned) {
-                targetId = mentioned.id;
-                args.shift();
-            } else {
-                const idArg = args.shift();
-                if (!idArg) {
-                    return message.reply("❌ Kullanım: `.unforceban @kullanıcı/id`");
-                }
-                targetId = idArg;
-            }
 
-            forceBannedUsers.delete(targetId);
-
-            try {
-                await message.guild.bans.remove(targetId, "UnForceBan ile ban kaldırıldı.");
-            } catch {
-                // ban yoksa sessiz geç
-            }
-
-            return message.reply(`✅ Force ban kaldırıldı. Kullanıcı ID: \`${targetId}\``);
-        }
-    } catch (err) {
-        console.error("messageCreate hatası:", err);
+    // SADECE BU ID KULLANABİLİR
+    if (message.author.id !== "827905938923978823") {
+        return message.reply("❌ Bu komutu sadece bot sahibi kullanabilir.");
     }
-});
+
+    let targetId;
+    const mentioned = message.mentions.users.first();
+    if (mentioned) {
+        targetId = mentioned.id;
+        args.shift();
+    } else {
+        const idArg = args.shift();
+        if (!idArg) return message.reply("❌ Kullanım: `.unforceban @kullanıcı/id`");
+        targetId = idArg;
+    }
+
+    forceBannedUsers.delete(targetId);
+
+    try {
+        await message.guild.bans.remove(targetId, "UnForceBan ile kaldırıldı.");
+    } catch {}
+
+    return message.reply(`✅ Force ban kaldırıldı. Kullanıcı ID: \`${targetId}\``);
+}
+
 
 // ===================================================================
 //                          BAŞVURU BUTONLARI
@@ -838,3 +840,4 @@ client.on("guildBanRemove", async (ban) => {
 
 // ------------- BOTU BAŞLAT -------------
 client.login(TOKEN);
+
