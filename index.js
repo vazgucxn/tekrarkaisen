@@ -943,7 +943,7 @@ client.on("interactionCreate", async (interaction) => {
     ]
 });
 
-return void interaction.editReply(`✔ Başvuru kanalın açıldı: ${ticketChannel}`);
+return interaction.editReply(`✔ Başvuru kanalın açıldı: ${ticketChannel}`);
 
 
 
@@ -1098,6 +1098,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
