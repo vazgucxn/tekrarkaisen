@@ -920,16 +920,16 @@ client.on("interactionCreate", async (interaction) => {
         new EmbedBuilder()
             .setTitle("📨 Başvuru Kanalı Açıldı")
             .setDescription(
-                `Lütfen aşağıdaki bilgileri doldurun:
+`**Lütfen aşağıdaki bilgileri doldurun:**
 
 **Yaşınız :**
 **Fivem Saati :**
 **Oynadığınız Ekipler :**
 **Fivem FPS :**
 **Map Bilginiz :**
-**Otoban/Bölge Bilginiz :**
+**Otoban / Bölge Bilginiz :**
 **Neden Savénia :**
-**Kill Pov (en az 5 tane) :**`
+**Kill POV (en az 5 tane) :**`
             )
             .setColor("#000000")
     ],
@@ -944,6 +944,7 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 return void interaction.editReply(`✔ Başvuru kanalın açıldı: ${ticketChannel}`);
+
 
 
 // ===================================================================
@@ -1097,6 +1098,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
