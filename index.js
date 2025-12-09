@@ -661,14 +661,14 @@ client.on("messageCreate", async (message) => {
             if (!role) return message.reply("Kullanım: `.basvurupanel @rol`");
 
             const embed = new EmbedBuilder()
-                .setTitle("📨 Başvuru Paneli")
+                .setTitle("Savénia Başvuru")
                 .setColor("#000000")
                 .setDescription("Aşağıdaki butona tıklayarak başvuru açabilirsiniz.");
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
                     .setCustomId(`apply_create:${role.id}`)
-                    .setLabel("Başvuru Aç")
+                    .setLabel("Başvur")
                     .setStyle(ButtonStyle.Success)
             );
 
@@ -919,7 +919,14 @@ client.on("interactionCreate", async (interaction) => {
                 embeds: [
                     new EmbedBuilder()
                         .setTitle("📨 Başvuru Kanalı Açıldı")
-                        .setDescription("Aşağıdaki butondan başvuruyu kapatabilirsin.")
+                        .setDescription("Yaşınız :
+Fivem Saati :
+Oynadığınız Ekipler :
+Fivem FPS :
+Map Bilginiz :
+Otoban/Bölge Bilginiz :
+Neden Savénia :
+Kill Pov (en az 5 tane) ")
                         .setColor("#000000")
                 ],
                 components: [
@@ -1120,5 +1127,6 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
