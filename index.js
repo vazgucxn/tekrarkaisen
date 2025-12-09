@@ -676,6 +676,54 @@ client.on("messageCreate", async (message) => {
             return;
         }
 
+ // ===================================================================
+//                           ŞAKA PATLATMA (.patlat)
+// ===================================================================
+if (cmd === "patlat") {
+    const embed1 = new EmbedBuilder()
+        .setColor("#000000")
+        .setTitle("💣 Sunucu Patlatma Başlatılıyor...")
+        .setDescription("Hazırlanıyor...");
+
+    const msg = await message.channel.send({ embeds: [embed1] });
+
+    setTimeout(async () => {
+        const embed2 = new EmbedBuilder()
+            .setColor("#000000")
+            .setTitle("💣 Sunucu Patlatma")
+            .setDescription("**3**");
+
+        await msg.edit({ embeds: [embed2] });
+    }, 1000);
+
+    setTimeout(async () => {
+        const embed3 = new EmbedBuilder()
+            .setColor("#000000")
+            .setTitle("💣 Sunucu Patlatma")
+            .setDescription("**2**");
+
+        await msg.edit({ embeds: [embed3] });
+    }, 2000);
+
+    setTimeout(async () => {
+        const embed4 = new EmbedBuilder()
+            .setColor("#000000")
+            .setTitle("💣 Sunucu Patlatma")
+            .setDescription("**1**");
+
+        await msg.edit({ embeds: [embed4] });
+    }, 3000);
+
+    setTimeout(async () => {
+        const embed5 = new EmbedBuilder()
+            .setColor("#000000")
+            .setTitle("💥 PATLAMA GERÇEKLEŞTİ 💥")
+            .setDescription("**Sunucu başarıyla patlatıldı!**\n\n> *Şaka yaptım 😎 hiçbir şey olmadı.*");
+
+        await msg.edit({ embeds: [embed5] });
+    }, 4000);
+}
+
         // ================================================================
         //                       FORCEBAN SISTEMI
         // ================================================================
@@ -1072,3 +1120,4 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
