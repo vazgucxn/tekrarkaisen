@@ -920,13 +920,13 @@ client.on("interactionCreate", async (interaction) => {
                     new EmbedBuilder()
                         .setTitle("📨 Başvuru Kanalı Açıldı")
                         .setDescription("Yaşınız :
-Fivem Saati :
-Oynadığınız Ekipler :
-Fivem FPS :
-Map Bilginiz :
-Otoban/Bölge Bilginiz :
-Neden Savénia :
-Kill Pov (en az 5 tane) ")
+                                        Fivem Saati :
+                                        Oynadığınız Ekipler :
+                                        Fivem FPS :
+                                        Map Bilginiz :
+                                        Otoban/Bölge Bilginiz :
+                                        Neden Savénia :
+                                        Kill Pov (en az 5 tane) ")
                         .setColor("#000000")
                 ],
                 components: [
@@ -1127,6 +1127,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
