@@ -915,66 +915,36 @@ client.on("interactionCreate", async (interaction) => {
             });
 
             await ticketChannel.send({
-                content: `<@${interaction.user.id}> | <@&${staffRoleId}>`,
-                embeds: [
-                    new EmbedBuilder()
-                        .setTitle("📨 Başvuru Kanalı Açıldı")
-                        .setDescription("Yaşınız :
-                                        Fivem Saati :
-                                        Oynadığınız Ekipler :
-                                        Fivem FPS :
-                                        Map Bilginiz :
-                                        Otoban/Bölge Bilginiz :
-                                        Neden Savénia :
-                                        Kill Pov (en az 5 tane) ")
-                        .setColor("#000000")
-                ],
-                components: [
-                    new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(`apply_close:${staffRoleId}:${interaction.user.id}`)
-                            .setLabel("Başvuruyu Kapat")
-                            .setStyle(ButtonStyle.Danger)
-                    )
-                ]
-            });
+    content: `<@${interaction.user.id}> | <@&${staffRoleId}>`,
+    embeds: [
+        new EmbedBuilder()
+            .setTitle("📨 Başvuru Kanalı Açıldı")
+            .setDescription(
+                `Lütfen aşağıdaki bilgileri doldurun:
 
-            return void interaction.editReply(`✔ Başvuru kanalın açıldı: ${ticketChannel}`);
-        }
-
-        // BAŞVURU KAPAT
-        if (interaction.customId.startsWith("apply_close:")) {
-            const [, staffRoleId, ownerId] = interaction.customId.split(":");
-
-            const channel = interaction.channel;
-
-            const isOwner = interaction.user.id === ownerId;
-            const isStaff =
-                interaction.member.roles.cache.has(staffRoleId) ||
-                interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
-
-            if (!isOwner && !isStaff) {
-                return void interaction.reply({
-                    content: "❌ Bu başvuruyu kapatmaya yetkin yok.",
-                    ephemeral: true
-                });
-            }
-
-            await channel.permissionOverwrites.edit(ownerId, {
-                ViewChannel: false,
-                SendMessages: false
-            }).catch(() => {});
-
-            if (!channel.name.startsWith("closed-")) {
-                await channel.setName(`closed-${channel.name}`.slice(0, 32)).catch(() => {});
-            }
-
-            return void interaction.reply("🔒 Başvuru kapatıldı. Kanal kayıt için saklandı.");
-        }
-    } catch (err) {
-        console.error("interactionCreate error:", err);
-    }
+**Yaşınız :**
+**Fivem Saati :**
+**Oynadığınız Ekipler :**
+**Fivem FPS :**
+**Map Bilginiz :**
+**Otoban/Bölge Bilginiz :**
+**Neden Savénia :**
+**Kill Pov (en az 5 tane) :**`
+            )
+            .setColor("#000000")
+    ],
+    components: [
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`apply_close:${staffRoleId}:${interaction.user.id}`)
+                .setLabel("Başvuruyu Kapat")
+                .setStyle(ButtonStyle.Danger)
+        )
+    ]
 });
+
+return void interaction.editReply(`✔ Başvuru kanalın açıldı: ${ticketChannel}`);
+
 
 // ===================================================================
 //              ETKİNLİK REAKSİYON SİSTEMİ (✔️ ile kayıt)
@@ -1127,6 +1097,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
