@@ -914,7 +914,7 @@ client.on("interactionCreate", async (interaction) => {
                 ]
             });
 
-            await ticketChannel.send({
+             await ticketChannel.send({
     content: `<@${interaction.user.id}> | <@&${staffRoleId}>`,
     embeds: [
         new EmbedBuilder()
@@ -934,7 +934,7 @@ client.on("interactionCreate", async (interaction) => {
 
 return interaction.editReply(`✔ Başvuru kanalın açıldı: ${ticketChannel}`);
 
- }
+} //  ←  BU KAPANIŞ KESİNLİKLE OLMALI !!!
 
 // ===================================================================
 //              ETKİNLİK REAKSİYON SİSTEMİ (✔️ ile kayıt)
@@ -1087,6 +1087,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
