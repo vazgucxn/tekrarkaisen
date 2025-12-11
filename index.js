@@ -21,7 +21,7 @@ const FORCE_BAN_OWNER = "827905938923978823"; // Forceban + backup sahibi (sadec
 
 // ----------- Express Keep-Alive (Render için) -----------
 const app = express();
-app.get("/", (_req, res) => res.send("Savénia bot aktif!"));
+app.get("/", (_req, res) => res.send("impêrion aktif!"));
 app.listen(process.env.PORT || 3000, () =>
     console.log("Render KeepAlive aktif.")
 );
@@ -121,7 +121,7 @@ client.once("ready", () => {
     client.user.setPresence({
         activities: [
             {
-                name: "vazgucxn ❤ Savénia",
+                name: "vazgucxn ❤ impêrion",
                 type: ActivityType.Streaming,
                 url: "https://twitch.tv/discord"
             }
@@ -219,7 +219,7 @@ client.on("messageCreate", async (message) => {
         // ================================================================
         if (cmd === "yardım" || cmd === "yardim") {
             const embed = new EmbedBuilder()
-                .setTitle("Savénia Bot Yardım")
+                .setTitle("impêrion Yardım")
                 .setColor("#000000")
                 .addFields(
                     {
@@ -284,7 +284,7 @@ client.on("messageCreate", async (message) => {
                             "`"
                     }
                 )
-                .setFooter({ text: "vazgucxn ❤ Savénia" });
+                .setFooter({ text: "vazgucxn ❤ impêrion" });
 
             return void message.channel.send({ embeds: [embed] });
         }
@@ -440,7 +440,7 @@ client.on("messageCreate", async (message) => {
             if (!member) return message.reply("❌ Kullanıcı sunucuda değil.");
 
             const bio = user.bio || "";
-            const required = ["discord.gg/savenia", "savenia", "/savenia", "**savenia**", "**/savenia**"];
+            const required = ["discord.gg/imperionmd", "imperionmd", "/imperionmd"];
 
             if (member.roles.cache.some(r => bioIgnoreRoles.has(r.id)))
                 return message.reply("ℹ️ Bu kullanıcı bio kontrolünden muaftır.");
@@ -462,7 +462,7 @@ client.on("messageCreate", async (message) => {
                                 .setDescription(`${member} bio’sunda gerekli tag yok.`)
                                 .addFields(
                                     { name: "Bio:", value: `\`\`\`${bio || "Boş"}\`\`\`` },
-                                    { name: "Gerekli:", value: "`discord.gg/savenia`\n`savenia`\n`/savenia`" }
+                                    { name: "Gerekli:", value: "`discord.gg/imperionmd`\n`imperionmd`\n`/imperionmd`" }
                                 )
                         ]
                     }).catch(() => {});
@@ -472,9 +472,9 @@ client.on("messageCreate", async (message) => {
             // DM uyarı
             try {
                 await user.send(
-                    "⚠️ **Savénia Bio Kontrol**\n" +
+                    "⚠️ **impêrion Bio Kontrol**\n" +
                     "Profil bio’nuzda gerekli tag bulunamadı!\n\n" +
-                    "Eklemelisin:\n`discord.gg/savenia`\n`savenia`\n`/savenia`"
+                    "Eklemelisin:\n`discord.gg/imperionmd`\n`imperionmd`\n`/imperionmd`"
                 );
             } catch {}
 
@@ -492,7 +492,7 @@ client.on("messageCreate", async (message) => {
             if (members.size === 0)
                 return message.reply("❌ Bu rolde kullanıcı yok.");
 
-            const required = ["discord.gg/savenia", "savenia", "/savenia"];
+            const required = ["discord.gg/imperionmd", "imperionmd", "/imperionmd"];
 
             let eksik = 0;
 
@@ -514,7 +514,7 @@ client.on("messageCreate", async (message) => {
                                         .setDescription(`${member} bio’sunda tag bulunamadı.`)
                                         .addFields(
                                             { name: "Bio:", value: `\`\`\`${bio || "Boş"}\`\`\`` },
-                                            { name: "Gerekli:", value: "`discord.gg/savenia`\n`savenia`\n`/savenia`" }
+                                            { name: "Gerekli:", value: "`discord.gg/imperionmd`\n`imperionmd`\n`/imperionmd`" }
                                         )
                                 ]
                             }).catch(() => {});
@@ -523,7 +523,7 @@ client.on("messageCreate", async (message) => {
 
                     try {
                         await member.send(
-                            "⚠️ **Savénia Bio Kontrol**\n" +
+                            "⚠️ **impêrion Bio Kontrol**\n" +
                             "Profil bio’nuzda gerekli tag bulunamadı.\n" +
                             "Lütfen ekleyin."
                         );
@@ -661,7 +661,7 @@ client.on("messageCreate", async (message) => {
             if (!role) return message.reply("Kullanım: `.basvurupanel @rol`");
 
             const embed = new EmbedBuilder()
-                .setTitle("Savénia Başvuru")
+                .setTitle("impêrion Başvuru")
                 .setColor("#000000")
                 .setDescription("Aşağıdaki butona tıklayarak başvuru açabilirsiniz.");
 
@@ -919,18 +919,7 @@ client.on("interactionCreate", async (interaction) => {
     embeds: [
         new EmbedBuilder()
             .setTitle("📨 Başvuru Kanalı Açıldı")
-            .setDescription(
-`**Lütfen aşağıdaki bilgileri doldurun:**
-
-**Yaşınız :**
-**Fivem Saati :**
-**Oynadığınız Ekipler :**
-**Fivem FPS :**
-**Map Bilginiz :**
-**Otoban / Bölge Bilginiz :**
-**Neden Savénia :**
-**Kill POV (en az 5 tane) :**`
-            )
+            .setDescription( Başvuru kanalındaki formu doldurup eksiksiz bir şekilde atınız.)
             .setColor("#000000")
     ],
     components: [
@@ -1049,7 +1038,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 
         if (oldBio === newBio) return;
 
-        const required = ["discord.gg/savenia", "savenia", "/savenia"];
+        const required = ["discord.gg/imperionmd", "imperionmd", "/imperionmd"];
         const valid = required.some(t => newBio.toLowerCase().includes(t));
 
         if (valid) return;
@@ -1082,9 +1071,9 @@ client.on("userUpdate", async (oldUser, newUser) => {
 
             try {
                 await member.send(
-                    "⚠️ **Savénia Sunucusu Bio Kontrol**\n" +
+                    "⚠️ **impêrion Bio Kontrol**\n" +
                     "Bio’nuzda gerekli tag bulunamadı. Ekleyiniz:\n" +
-                    "`discord.gg/savenia`\n`savenia`\n`/savenia`"
+                    "`discord.gg/imperionmd`\n`imperionmd`\n`/imperionmd`"
                 );
             } catch {}
         }
@@ -1098,6 +1087,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
