@@ -1034,49 +1034,67 @@ client.on("guildBanRemove", async (ban) => {
     }
 });
 
-// --- .id [oyuncuID] (FiveM ID Sorgulama) ---
-    if (command === '.id') {
-        const playerId = args[1];
-        
-        if (!playerId || isNaN(playerId)) {
-            return message.reply(`Kullanım: \`.id [Oyuncu Server ID]\`. Oyuncunun oyun içi ID'sini girmelisiniz.`);
-        }
-        
-        const ipPort = "185.137.98.87:30120";
+// ==========================
+//   .id Komutu (FiveM ID)
+// ==========================
+if (cmd === "id") {
 
-        const loadingMsg = await message.channel.send(`⏱️ **${ipPort}** sunucusundan **${playerId}** ID'li oyuncu bilgileri çekiliyor...`);
-        const playerDetails = await getPlayerDetails(ipPort, playerId);
+    const playerId = args[0];
+    const ipPort = "185.137.98.87:30120";
 
-        let embed;
-
-        if (playerDetails.serverDown) {
-            embed = new EmbedBuilder()
-                .setColor(0xFF0000)
-                .setTitle(`🔴 Sunucu Çevrimdışı`)
-                .setDescription(`**${ipPort}** adresli sunucuya ulaşılamıyor veya oyuncu bilgileri alınamıyor.`);
-        } else if (playerDetails.found) {
-            embed = new EmbedBuilder()
-                .setColor(0x00BFFF)
-                .setTitle(`👤 Oyuncu Detayları: ${playerDetails.name}`)
-                .setDescription(`**Sunucu:** \`${ipPort}\``)
-                .addFields(
-                    { name: 'Oyun İçi ID', value: `\`${playerDetails.id}\``, inline: true },
-                    { name: 'Ping', value: `\`${playerDetails.ping} ms\``, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
-                    { name: 'Steam Hex', value: `\`${playerDetails.steamHex}\``, inline: false },
-                    { name: 'Discord ID', value: `\`${playerDetails.discordId}\``, inline: false },
-                )
-                .setTimestamp();
-        } else {
-             embed = new EmbedBuilder()
-                .setColor(0xFFA500)
-                .setTitle(`🟠 Oyuncu Bulunamadı`)
-                .setDescription(`\`${ipPort}\` sunucusunda **${playerId}** ID'li aktif bir oyuncu bulunamadı. ID'nin doğru ve oyuncunun çevrimiçi olduğundan emin olun.`);
-        }
-
-        await loadingMsg.edit({ content: '\u200b', embeds: [embed] });
-        return;
+    if (!playerId || isNaN(playerId)) {
+        return message.reply("Kullanım: `.id <oyuncuID>`");
     }
+
+    // --- Bilgi Mesajı ---
+    const loadingMsg = await message.channel.send(
+        `⏱️ **${ipPort}** sunucusundan **${playerId}** ID'li oyuncu bilgileri çekiliyor...`
+    );
+
+    // --- Sunucu & Oyuncu Bilgilerini Çek ---
+    const playerDetails = await getPlayerDetails(ipPort, playerId);
+
+    let embed;
+
+    // 🔴 SUNUCU KAPALI
+    if (playerDetails.serverDown) {
+        embed = new EmbedBuilder()
+            .setColor("Red")
+            .setTitle("🔴 Sunucu Çevrimdışı")
+            .setDescription(`**${ipPort}** adresli sunucuya erişilemedi.`);
+    }
+
+    // 🔵 OYUNCU BULUNDU
+    else if (playerDetails.found) {
+        embed = new EmbedBuilder()
+            .setColor("Blue")
+            .setTitle(`👤 Oyuncu: ${playerDetails.name}`)
+            .setDescription(`**Sunucu:** \`${ipPort}\``)
+            .addFields(
+                { name: "Oyun İçi ID", value: `\`${playerDetails.id}\``, inline: true },
+                { name: "Ping", value: `\`${playerDetails.ping} ms\``, inline: true },
+                { name: "Steam Hex", value: `\`${playerDetails.steamHex}\`` },
+                { name: "Discord ID", value: `\`${playerDetails.discordId}\`` }
+            )
+            .setTimestamp();
+    }
+
+    // 🟠 OYUNCU YOK
+    else {
+        embed = new EmbedBuilder()
+            .setColor("Orange")
+            .setTitle("🟠 Oyuncu Bulunamadı")
+            .setDescription(
+                `\`${ipPort}\` sunucusunda **${playerId}** ID'li aktif oyuncu bulunamadı.`
+            );
+    }
+
+    // --- Mesajı güncelle ---
+    await loadingMsg.edit({ content: "", embeds: [embed] });
+
+    return;
+}
+
 
 // ===================================================================
 //                OTOMATİK BIO KONTROL (userUpdate)
@@ -1137,6 +1155,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
