@@ -764,7 +764,7 @@ if (cmd === "patlat") {
         const embed5 = new EmbedBuilder()
             .setColor("#000000")
             .setTitle("💥 PATLAMA GERÇEKLEŞTİ 💥")
-            .setDescription("**Sunucu başarıyla patlatıldı!**\n\n> *Şaka yaptım 😎 hiçbir şey olmadı.*");
+            .setDescription("**Allah başarıyla patlatıldı!**\n\n> *Şaka yaptım yarram 🤣*");
 
         await msg.edit({ embeds: [embed5] });
     }, 4000);
@@ -1140,6 +1140,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
