@@ -934,7 +934,13 @@ client.on("interactionCreate", async (interaction) => {
 
 return interaction.editReply(`✔ Başvuru kanalın açıldı: ${ticketChannel}`);
 
-} //  ←  BU KAPANIŞ KESİNLİKLE OLMALI !!!
+} // buton apply_create kapanış
+
+    } catch (err) {
+        console.error("interactionCreate error:", err);
+    }
+}); // ← BU BOTTA YOKTU, EKLEMEN LAZIM !!!
+
 
 // ===================================================================
 //              ETKİNLİK REAKSİYON SİSTEMİ (✔️ ile kayıt)
@@ -1087,6 +1093,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
