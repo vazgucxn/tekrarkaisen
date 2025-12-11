@@ -551,6 +551,52 @@ client.on("messageCreate", async (message) => {
             setTimeout(() => msg.delete().catch(() => {}), 3000);
             return;
         }
+// ==========================
+//        .id Komutu
+// ==========================
+if (cmd === "id") {
+    const playerId = args[0];
+    const ipPort = "185.137.98.87:30120";
+
+    if (!playerId || isNaN(playerId)) {
+        return message.reply("Kullanım: `.id <oyuncuID>`");
+    }
+
+    const loadingMsg = await message.channel.send(
+        `⏱️ **${ipPort}** sunucusundan **${playerId}** ID'li oyuncu bilgileri çekiliyor...`
+    );
+
+    const playerDetails = await getPlayerDetails(ipPort, playerId);
+
+    let embed;
+
+    if (playerDetails.serverDown) {
+        embed = new EmbedBuilder()
+            .setColor("Red")
+            .setTitle("🔴 Sunucu Çevrimdışı")
+            .setDescription(`**${ipPort}** adresli sunucuya ulaşılamıyor.`);
+    } 
+    else if (playerDetails.found) {
+        embed = new EmbedBuilder()
+            .setColor("Blue")
+            .setTitle(`👤 Oyuncu: ${playerDetails.name}`)
+            .addFields(
+                { name: "Oyun İçi ID", value: `\`${playerDetails.id}\`` },
+                { name: "Ping", value: `\`${playerDetails.ping} ms\`` },
+                { name: "Steam Hex", value: `\`${playerDetails.steamHex}\`` },
+                { name: "Discord ID", value: `\`${playerDetails.discordId}\`` }
+            );
+    } 
+    else {
+        embed = new EmbedBuilder()
+            .setColor("Orange")
+            .setTitle("🟠 Oyuncu Bulunamadı")
+            .setDescription(`Sunucuda **${playerId}** ID ile aktif oyuncu yok.`);
+    }
+
+    await loadingMsg.edit({ content: "", embeds: [embed] });
+    return;
+}
 
         // ================================================================
         //                      .nuke
@@ -1034,67 +1080,6 @@ client.on("guildBanRemove", async (ban) => {
     }
 });
 
-// ==========================
-//   .id Komutu (FiveM ID)
-// ==========================
-if (cmd === "id") {
-
-    const playerId = args[0];
-    const ipPort = "185.137.98.87:30120";
-
-    if (!playerId || isNaN(playerId)) {
-        return message.reply("Kullanım: `.id <oyuncuID>`");
-    }
-
-    // --- Bilgi Mesajı ---
-    const loadingMsg = await message.channel.send(
-        `⏱️ **${ipPort}** sunucusundan **${playerId}** ID'li oyuncu bilgileri çekiliyor...`
-    );
-
-    // --- Sunucu & Oyuncu Bilgilerini Çek ---
-    const playerDetails = await getPlayerDetails(ipPort, playerId);
-
-    let embed;
-
-    // 🔴 SUNUCU KAPALI
-    if (playerDetails.serverDown) {
-        embed = new EmbedBuilder()
-            .setColor("Red")
-            .setTitle("🔴 Sunucu Çevrimdışı")
-            .setDescription(`**${ipPort}** adresli sunucuya erişilemedi.`);
-    }
-
-    // 🔵 OYUNCU BULUNDU
-    else if (playerDetails.found) {
-        embed = new EmbedBuilder()
-            .setColor("Blue")
-            .setTitle(`👤 Oyuncu: ${playerDetails.name}`)
-            .setDescription(`**Sunucu:** \`${ipPort}\``)
-            .addFields(
-                { name: "Oyun İçi ID", value: `\`${playerDetails.id}\``, inline: true },
-                { name: "Ping", value: `\`${playerDetails.ping} ms\``, inline: true },
-                { name: "Steam Hex", value: `\`${playerDetails.steamHex}\`` },
-                { name: "Discord ID", value: `\`${playerDetails.discordId}\`` }
-            )
-            .setTimestamp();
-    }
-
-    // 🟠 OYUNCU YOK
-    else {
-        embed = new EmbedBuilder()
-            .setColor("Orange")
-            .setTitle("🟠 Oyuncu Bulunamadı")
-            .setDescription(
-                `\`${ipPort}\` sunucusunda **${playerId}** ID'li aktif oyuncu bulunamadı.`
-            );
-    }
-
-    // --- Mesajı güncelle ---
-    await loadingMsg.edit({ content: "", embeds: [embed] });
-
-    return;
-}
-
 
 // ===================================================================
 //                OTOMATİK BIO KONTROL (userUpdate)
@@ -1155,6 +1140,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
