@@ -919,7 +919,7 @@ client.on("interactionCreate", async (interaction) => {
     embeds: [
         new EmbedBuilder()
             .setTitle("📨 Başvuru Kanalı Açıldı")
-            .setDescription( Başvuru kanalındaki formu doldurup eksiksiz bir şekilde atınız.)
+            .setDescription("Başvuru kanalındaki formu doldurup eksiksiz bir şekilde atınız.")
             .setColor("#000000")
     ],
     components: [
@@ -1087,6 +1087,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
