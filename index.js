@@ -14,25 +14,22 @@ const {
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-// 🔹 FiveM / CFX API için fetch (BURAYA EKLE)
-const fetch = (...args) =>
-    import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
 async function getPlayerFromCFX(playerId) {
     try {
+        console.log("CFX API isteği atılıyor...");
+
         const res = await fetch(
-    "https://servers-frontend.fivem.net/api/servers/single/xjx5kr",
-    {
-        method: "GET",
-        headers: {
-            "User-Agent": "Mozilla/5.0 (DiscordBot)",
-            "Accept": "application/json"
-        }
-    }
-);
+            "https://servers-frontend.fivem.net/api/servers/single/xjx5kr",
+            {
+                headers: {
+                    "User-Agent": "Mozilla/5.0",
+                    "Accept": "application/json"
+                }
+            }
+        );
 
-
-        if (!res.ok) return { serverDown: true };
+        console.log("CFX STATUS:", res.status);
 
         const json = await res.json();
         const players = json?.Data?.players || [];
@@ -45,17 +42,20 @@ async function getPlayerFromCFX(playerId) {
         return {
             found: true,
             id: player.id,
-            name: player.name || "Bilinmiyor",
+            name: player.name ?? "Bilinmiyor",
             ping: player.ping ?? "N/A",
-            steamHex: identifiers.find(i => i.startsWith("steam:")) || "Bulunamadı",
+            steamHex: identifiers.find(i => i.startsWith("steam:")) ?? "Bulunamadı",
             discordId:
                 identifiers.find(i => i.startsWith("discord:"))
-                    ?.replace("discord:", "") || "Bulunamadı"
+                    ?.replace("discord:", "") ?? "Bulunamadı"
         };
+
     } catch (err) {
+        console.error("CFX FETCH HATASI:", err);
         return { serverDown: true };
     }
 }
+
 
 // ----------- Prefix & Owner Ayarları -----------
 const PREFIX = ".";
@@ -1193,6 +1193,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
