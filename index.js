@@ -650,6 +650,50 @@ if (cmd === "id") {
     return;
 }
 
+// ==========================
+//        .tag Komutu
+// ==========================
+if (cmd === "tag") {
+    const keyword = args.join(" ").toLowerCase();
+    if (!keyword) {
+        return message.reply("Kullanım: `.tag <aranacak_kelime>`");
+    }
+
+    await message.guild.members.fetch(); // tüm üyeleri çek
+
+    const matched = message.guild.members.cache.filter(m => {
+        const name =
+            (m.nickname || m.user.username || "").toLowerCase();
+        return name.includes(keyword);
+    });
+
+    if (matched.size === 0) {
+        const embed = new EmbedBuilder()
+            .setColor("#000000")
+            .setTitle("🔍 Tag Arama")
+            .setDescription(`İsminde **${keyword}** geçen kimse bulunamadı.`)
+            .setFooter({ text: "vazgucxn ❤ impêrion" });
+
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    const list = matched
+        .map((m, i) => `${i + 1}. ${m} (\`${m.user.tag}\`)`)
+        .slice(0, 50) // embed limit
+        .join("\n");
+
+    const embed = new EmbedBuilder()
+        .setColor("#000000")
+        .setTitle(`🔎 Tag Arama: ${keyword}`)
+        .setDescription(list)
+        .addFields({
+            name: "Toplam",
+            value: `${matched.size} kişi`
+        })
+        .setFooter({ text: "vazgucxn ❤ impêrion" });
+
+    return message.channel.send({ embeds: [embed] });
+}
 
         // ================================================================
         //                      .nuke
@@ -1193,6 +1237,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
