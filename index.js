@@ -21,8 +21,16 @@ const fetch = (...args) =>
 async function getPlayerFromCFX(playerId) {
     try {
         const res = await fetch(
-            "https://servers-frontend.fivem.net/api/servers/single/xjx5kr"
-        );
+    "https://servers-frontend.fivem.net/api/servers/single/xjx5kr",
+    {
+        method: "GET",
+        headers: {
+            "User-Agent": "Mozilla/5.0 (DiscordBot)",
+            "Accept": "application/json"
+        }
+    }
+);
+
 
         if (!res.ok) return { serverDown: true };
 
@@ -1185,6 +1193,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
