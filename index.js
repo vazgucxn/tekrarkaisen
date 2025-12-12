@@ -14,6 +14,40 @@ const {
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+// 🔹 FiveM / CFX API için fetch (BURAYA EKLE)
+const fetch = (...args) =>
+    import("node-fetch").then(({ default: fetch }) => fetch(...args));
+
+async function getPlayerFromCFX(playerId) {
+    try {
+        const res = await fetch(
+            "https://servers-frontend.fivem.net/api/servers/single/xjx5kr"
+        );
+
+        if (!res.ok) return { serverDown: true };
+
+        const json = await res.json();
+        const players = json?.Data?.players || [];
+
+        const player = players.find(p => String(p.id) === String(playerId));
+        if (!player) return { found: false };
+
+        const identifiers = player.identifiers || [];
+
+        return {
+            found: true,
+            id: player.id,
+            name: player.name || "Bilinmiyor",
+            ping: player.ping ?? "N/A",
+            steamHex: identifiers.find(i => i.startsWith("steam:")) || "Bulunamadı",
+            discordId:
+                identifiers.find(i => i.startsWith("discord:"))
+                    ?.replace("discord:", "") || "Bulunamadı"
+        };
+    } catch (err) {
+        return { serverDown: true };
+    }
+}
 
 // ----------- Prefix & Owner Ayarları -----------
 const PREFIX = ".";
@@ -218,76 +252,85 @@ client.on("messageCreate", async (message) => {
         //                     YARDIM MENÜSÜ
         // ================================================================
         if (cmd === "yardım" || cmd === "yardim") {
-            const embed = new EmbedBuilder()
-                .setTitle("impêrion Yardım")
-                .setColor("#000000")
-                .addFields(
-                    {
-                        name: "🎟 Etkinlik Sistemi",
-                        value:
-                            "`" +
-                            ".etkinlik #kanal limit açıklama\n" +
-                            ".etkinlik-bitir\n" +
-                            ".etkinlikekle @kullanıcı\n" +
-                            ".etkinlikçıkar @kullanıcı" +
-                            "`"
-                    },
-                    {
-                        name: "🧹 Moderasyon",
-                        value:
-                            "`" +
-                            ".sil <miktar> → Mesaj siler\n" +
-                            ".nuke → Kanalı sıfırlar" +
-                            "`"
-                    },
-                    {
-                        name: "💌 DM Sistemi",
-                        value: "`" + ".dm @rol mesaj" + "`"
-                    },
-                    {
-                        name: "📨 Başvuru Sistemi",
-                        value: "`" + ".basvurupanel @YetkiliRol" + "`"
-                    },
-                    {
-                        name: "🛡 Yetkili Sistemi",
-                        value:
-                            "`" +
-                            ".yetkiekle @rol\n" +
-                            ".yetkicikar @rol\n" +
-                            ".yetkiler" +
-                            "`"
-                    },
-                    {
-                        name: "🚫 ForceBan Sistemi",
-                        value:
-                            "`" +
-                            ".forceban @kullanıcı/id sebep\n" +
-                            ".unforceban @kullanıcı/id" +
-                            "`\n(Sadece <@" + FORCE_BAN_OWNER + "> kullanabilir!)"
-                    },
-                    {
-                        name: "📝 Bio Kontrol Sistemi",
-                        value:
-                            "`" +
-                            ".bio-kontrol #kanal → Uyarı kanalı seç\n" +
-                            ".bio-kontrol-rol @rol → Bio kontrol dışı rol\n" +
-                            ".bio-tara @kullanıcı → Tek kişiyi tara\n" +
-                            ".kontrol @rol → Roldaki herkesi tara" +
-                            "`"
-                    },
-                    {
-                        name: "💾 Yedek Sistemi (Sadece Sen)",
-                        value:
-                            "`" +
-                            ".backup → Sunucu yapısını RAM’e yedekler\n" +
-                            ".startbackup → Yedeği uygular (rol + kanal isimleri)" +
-                            "`"
-                    }
-                )
-                .setFooter({ text: "vazgucxn ❤ impêrion" });
+    const embed = new EmbedBuilder()
+        .setTitle("impêrion Yardım")
+        .setColor("#000000")
+        .addFields(
+            {
+                name: "🎟 Etkinlik Sistemi",
+                value:
+                    "`" +
+                    ".etkinlik #kanal limit açıklama\n" +
+                    ".etkinlik-bitir\n" +
+                    ".etkinlikekle @kullanıcı\n" +
+                    ".etkinlikçıkar @kullanıcı" +
+                    "`"
+            },
+            {
+                name: "🧹 Moderasyon",
+                value:
+                    "`" +
+                    ".sil <miktar> → Mesaj siler\n" +
+                    ".nuke → Kanalı sıfırlar" +
+                    "`"
+            },
+            {
+                name: "💌 DM Sistemi",
+                value: "`" + ".dm @rol mesaj" + "`"
+            },
+            {
+                name: "📨 Başvuru Sistemi",
+                value: "`" + ".basvurupanel @YetkiliRol" + "`"
+            },
+            {
+                name: "🛡 Yetkili Sistemi",
+                value:
+                    "`" +
+                    ".yetkiekle @rol\n" +
+                    ".yetkicikar @rol\n" +
+                    ".yetkiler" +
+                    "`"
+            },
+            {
+                name: "🚫 ForceBan Sistemi",
+                value:
+                    "`" +
+                    ".forceban @kullanıcı/id sebep\n" +
+                    ".unforceban @kullanıcı/id" +
+                    "`\n(Sadece <@" + FORCE_BAN_OWNER + "> kullanabilir!)"
+            },
+            {
+                name: "📝 Bio Kontrol Sistemi",
+                value:
+                    "`" +
+                    ".bio-kontrol #kanal → Uyarı kanalı seç\n" +
+                    ".bio-kontrol-rol @rol → Bio kontrol dışı rol\n" +
+                    ".bio-tara @kullanıcı → Tek kişiyi tara\n" +
+                    ".kontrol @rol → Roldaki herkesi tara" +
+                    "`"
+            },
+            {
+                name: "💾 Yedek Sistemi (Sadece Sen)",
+                value:
+                    "`" +
+                    ".backup → Sunucu yapısını RAM’e yedekler\n" +
+                    ".startbackup → Yedeği uygular (rol + kanal isimleri)" +
+                    "`"
+            },
+            {
+                name: "🕹️ Oyuncu Sorgulama",
+                value:
+                    "`" +
+                    ".id <oyuncuID> → Oyuncu bilgisi sorgula\n" +
+                    ".players → Sunucudaki tüm oyuncuları listele\n" +
+                    ".idisim <isim> → İsim ile oyuncu ara" +
+                    "`"
+            }
+        )
+        .setFooter({ text: "vazgucxn ❤ impêrion" });
 
-            return void message.channel.send({ embeds: [embed] });
-        }
+    return void message.channel.send({ embeds: [embed] });
+}
 
         // ================================================================
         //                    SADECE SAHİP KOMUTLARI
@@ -556,47 +599,49 @@ client.on("messageCreate", async (message) => {
 // ==========================
 if (cmd === "id") {
     const playerId = args[0];
-    const ipPort = "185.137.98.87:30120";
 
     if (!playerId || isNaN(playerId)) {
         return message.reply("Kullanım: `.id <oyuncuID>`");
     }
 
     const loadingMsg = await message.channel.send(
-        `⏱️ **${ipPort}** sunucusundan **${playerId}** ID'li oyuncu bilgileri çekiliyor...`
+        `⏱️ **CFX** üzerinden **${playerId}** ID'li oyuncu aranıyor...`
     );
 
-    const playerDetails = await getPlayerDetails(ipPort, playerId);
+    const player = await getPlayerFromCFX(playerId);
 
     let embed;
 
-    if (playerDetails.serverDown) {
+    if (player.serverDown) {
         embed = new EmbedBuilder()
             .setColor("Red")
-            .setTitle("🔴 Sunucu Çevrimdışı")
-            .setDescription(`**${ipPort}** adresli sunucuya ulaşılamıyor.`);
+            .setTitle("🔴 Sunucuya Ulaşılamıyor")
+            .setDescription("CFX API yanıt vermiyor.");
     } 
-    else if (playerDetails.found) {
-        embed = new EmbedBuilder()
-            .setColor("Blue")
-            .setTitle(`👤 Oyuncu: ${playerDetails.name}`)
-            .addFields(
-                { name: "Oyun İçi ID", value: `\`${playerDetails.id}\`` },
-                { name: "Ping", value: `\`${playerDetails.ping} ms\`` },
-                { name: "Steam Hex", value: `\`${playerDetails.steamHex}\`` },
-                { name: "Discord ID", value: `\`${playerDetails.discordId}\`` }
-            );
-    } 
-    else {
+    else if (!player.found) {
         embed = new EmbedBuilder()
             .setColor("Orange")
             .setTitle("🟠 Oyuncu Bulunamadı")
-            .setDescription(`Sunucuda **${playerId}** ID ile aktif oyuncu yok.`);
+            .setDescription(`**${playerId}** ID'li oyuncu sunucuda yok.`);
+    } 
+    else {
+        embed = new EmbedBuilder()
+            .setColor("#000000")
+            .setTitle(`👤 Oyuncu Bilgileri`)
+            .addFields(
+                { name: "İsim", value: `\`${player.name}\`` },
+                { name: "Oyun İçi ID", value: `\`${player.id}\``, inline: true },
+                { name: "Ping", value: `\`${player.ping}\``, inline: true },
+                { name: "Steam Hex", value: `\`${player.steamHex}\`` },
+                { name: "Discord ID", value: `\`${player.discordId}\`` }
+            )
+            .setFooter({ text: "CFX üzerinden çekildi" });
     }
 
     await loadingMsg.edit({ content: "", embeds: [embed] });
     return;
 }
+
 
         // ================================================================
         //                      .nuke
@@ -1140,6 +1185,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
