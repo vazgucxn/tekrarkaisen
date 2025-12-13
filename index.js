@@ -624,7 +624,7 @@ if (cmd === "id") {
         embed = new EmbedBuilder()
             .setColor("Red")
             .setTitle("🔴 Sunucuya Ulaşılamıyor")
-            .setDescription("CFX API yanıt vermiyor.");
+            .setDescription("VAZGUCXN APİ YANIT VERMİYOR");
     } 
     else if (!player.found) {
         embed = new EmbedBuilder()
@@ -643,7 +643,7 @@ if (cmd === "id") {
                 { name: "Steam Hex", value: `\`${player.steamHex}\`` },
                 { name: "Discord ID", value: `\`${player.discordId}\`` }
             )
-            .setFooter({ text: "CFX üzerinden çekildi" });
+            .setFooter({ text: "VAZGUCXN APİ CHECKİNG" });
     }
 
     await loadingMsg.edit({ content: "", embeds: [embed] });
@@ -655,45 +655,43 @@ if (cmd === "id") {
 // ==========================
 if (cmd === "tag") {
     const keyword = args.join(" ").toLowerCase();
+
     if (!keyword) {
         return message.reply("Kullanım: `.tag <aranacak_kelime>`");
     }
 
-    await message.guild.members.fetch(); // tüm üyeleri çek
+    await message.guild.members.fetch();
 
-    const matched = message.guild.members.cache.filter(m => {
-        const name =
-            (m.nickname || m.user.username || "").toLowerCase();
+    const found = message.guild.members.cache.filter(m => {
+        const name = (m.nickname || m.user.username).toLowerCase();
         return name.includes(keyword);
     });
 
-    if (matched.size === 0) {
-        const embed = new EmbedBuilder()
-            .setColor("#000000")
-            .setTitle("🔍 Tag Arama")
-            .setDescription(`İsminde **${keyword}** geçen kimse bulunamadı.`)
-            .setFooter({ text: "vazgucxn ❤ impêrion" });
-
-        return message.channel.send({ embeds: [embed] });
+    if (found.size === 0) {
+        return message.channel.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor("#000000")
+                    .setTitle("🔍 Tag Arama")
+                    .setDescription(`İsminde **${keyword}** geçen kimse bulunamadı.`)
+            ]
+        });
     }
 
-    const list = matched
+    const list = found
         .map((m, i) => `${i + 1}. ${m} (\`${m.user.tag}\`)`)
-        .slice(0, 50) // embed limit
+        .slice(0, 40)
         .join("\n");
 
     const embed = new EmbedBuilder()
         .setColor("#000000")
         .setTitle(`🔎 Tag Arama: ${keyword}`)
         .setDescription(list)
-        .addFields({
-            name: "Toplam",
-            value: `${matched.size} kişi`
-        })
-        .setFooter({ text: "vazgucxn ❤ impêrion" });
+        .setFooter({ text: `Toplam: ${found.size} kişi` });
 
     return message.channel.send({ embeds: [embed] });
 }
+
 
         // ================================================================
         //                      .nuke
@@ -1237,6 +1235,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
