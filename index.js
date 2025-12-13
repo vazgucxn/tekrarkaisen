@@ -1690,13 +1690,13 @@ if (!oldMember.isCommunicationDisabled() && newMember.isCommunicationDisabled())
     sendGuardLog(newMember.guild, embed);
 }
 
-    }
 });
 
 // ===================================================================
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
