@@ -581,7 +581,7 @@ client.on("messageCreate", async (message) => {
                         await member.send(
                             "⚠️ **impêrion Bio Kontrol**\n" +
                             "Profil bio’nuzda gerekli tag bulunamadı.\n" +
-                            "Lütfen ekleyin."
+                            "Lütfen ekleyin. Eğer tagınız var ise bu uyarıyı görmezden gelin."
                         );
                     } catch {}
                 }
@@ -1259,6 +1259,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
