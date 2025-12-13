@@ -15,6 +15,11 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 
+function cleanFiveMName(name = "") {
+    return name.replace(/\^\d/g, "").toLowerCase();
+}
+
+
 async function getPlayerFromCFX(playerId) {
     try {
         console.log("CFX API isteği atılıyor...");
@@ -158,7 +163,7 @@ async function updateEtkinlikMessage(message, data) {
 
 // ===================== BOT READY =====================
 client.once("ready", () => {
-    console.log(`🔵 Bot aktif: ${client.user.tag}`);
+    console.log(`🔵 Bot aktif: ${client.user}`);
 
     client.user.setPresence({
         activities: [
@@ -654,65 +659,56 @@ if (cmd === "id") {
 //        .tag (FiveM)
 // ==========================
 if (cmd === "tag") {
-    const searchRaw = args.join(" ");
-    if (!searchRaw) {
+    const search = args.join(" ").toLowerCase();
+    if (!search) {
         return message.reply("Kullanım: `.tag <kelime veya cümle>`");
     }
 
-    const search = searchRaw.toLowerCase();
-
     const loadingMsg = await message.channel.send(
-        `🔍 **FiveM** üzerinde **"${searchRaw}"** aranıyor...`
+        `🔍 **CFX** üzerinden \`${search}\` aranıyor...`
     );
 
-    const players = await getPlayersFromCFX();
+    let embed;
 
-    if (!players) {
-        return loadingMsg.edit({
-            content: "",
-            embeds: [
-                new EmbedBuilder()
-                    .setColor("Red")
-                    .setTitle("🔴 Sunucuya Ulaşılamıyor")
-                    .setDescription("CFX API yanıt vermiyor.")
-            ]
-        });
+    try {
+        const res = await fetch(
+            "https://servers-frontend.fivem.net/api/servers/single/xjx5kr",
+            { timeout: 8000 } // 🔴 KRİTİK
+        );
+
+        if (!res.ok) throw new Error("CFX API cevap vermedi");
+
+        const json = await res.json();
+        const players = json?.Data?.players || [];
+
+        const matched = players.filter(p =>
+            cleanFiveMName(p.name).includes(search)
+        );
+
+        if (matched.length === 0) {
+            embed = new EmbedBuilder()
+                .setColor("Orange")
+                .setTitle("🟠 Oyuncu Bulunamadı")
+                .setDescription(`Nickinde **${search}** geçen oyuncu yok.`);
+        } else {
+            embed = new EmbedBuilder()
+                .setColor("#000000")
+                .setTitle(`🔎 Bulunan Oyuncular (${matched.length})`)
+                .setDescription(
+                    matched
+                        .slice(0, 20)
+                        .map(p => `• ${p.name} (ID: ${p.id})`)
+                        .join("\n")
+                )
+                .setFooter({ text: "CFX üzerinden çekildi" });
+        }
+
+    } catch (err) {
+        embed = new EmbedBuilder()
+            .setColor("Red")
+            .setTitle("🔴 Hata")
+            .setDescription("CFX API'den veri alınamadı veya zaman aşımı.");
     }
-
-    const matched = players.filter(p =>
-        (p.name || "").toLowerCase().includes(search)
-    );
-
-    if (matched.length === 0) {
-        return loadingMsg.edit({
-            content: "",
-            embeds: [
-                new EmbedBuilder()
-                    .setColor("Orange")
-                    .setTitle("🔍 Tag Arama")
-                    .setDescription(`İsminde **${searchRaw}** geçen oyuncu bulunamadı.`)
-            ]
-        });
-    }
-
-    const list = matched
-        .slice(0, 25)
-        .map((p, i) => {
-            const discord =
-                p.identifiers?.find(x => x.startsWith("discord:"))
-                    ?.replace("discord:", "") || "Yok";
-
-            return `**${i + 1}.** \`${p.name}\` | ID: \`${p.id}\` | Discord: \`${discord}\``;
-        })
-        .join("\n");
-
-    const embed = new EmbedBuilder()
-        .setColor("#000000")
-        .setTitle(`🔎 FiveM Tag Arama`)
-        .setDescription(list)
-        .setFooter({
-            text: `Bulunan: ${matched.length} oyuncu`
-        });
 
     await loadingMsg.edit({ content: "", embeds: [embed] });
     return;
@@ -1263,6 +1259,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
