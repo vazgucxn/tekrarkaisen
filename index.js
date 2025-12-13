@@ -651,60 +651,73 @@ if (cmd === "id") {
 }
 
 // ==========================
-//        .tag Komutu (FIX)
+//        .tag (FiveM)
 // ==========================
 if (cmd === "tag") {
-    const keywordRaw = args.join(" ");
-    if (!keywordRaw) {
-        return message.reply("Kullanım: `.tag <aranacak_kelime>`");
+    const searchRaw = args.join(" ");
+    if (!searchRaw) {
+        return message.reply("Kullanım: `.tag <kelime veya cümle>`");
     }
 
-    // TÜRKÇE karakter normalize
-    const normalize = (str) =>
-        str
-            .toLowerCase()
-            .replace(/ı/g, "i")
-            .replace(/İ/g, "i")
-            .replace(/ş/g, "s")
-            .replace(/ğ/g, "g")
-            .replace(/ü/g, "u")
-            .replace(/ö/g, "o")
-            .replace(/ç/g, "c");
+    const search = searchRaw.toLowerCase();
 
-    const keyword = normalize(keywordRaw);
+    const loadingMsg = await message.channel.send(
+        `🔍 **FiveM** üzerinde **"${searchRaw}"** aranıyor...`
+    );
 
-    // 🔥 TÜM ÜYELERİ CACHE'E ÇEK
-    await message.guild.members.fetch({ force: true });
+    const players = await getPlayersFromCFX();
 
-    const found = message.guild.members.cache.filter(m => {
-        const name = normalize(m.nickname || m.user.username);
-        return name.includes(keyword);
-    });
-
-    if (found.size === 0) {
-        return message.channel.send({
+    if (!players) {
+        return loadingMsg.edit({
+            content: "",
             embeds: [
                 new EmbedBuilder()
-                    .setColor("#000000")
-                    .setTitle("🔍 Tag Arama")
-                    .setDescription(`İsminde **${keywordRaw}** geçen kimse bulunamadı.`)
+                    .setColor("Red")
+                    .setTitle("🔴 Sunucuya Ulaşılamıyor")
+                    .setDescription("CFX API yanıt vermiyor.")
             ]
         });
     }
 
-    const list = found
-        .map((m, i) => `${i + 1}. ${m} (\`${m.user.tag}\`)`)
-        .slice(0, 40)
+    const matched = players.filter(p =>
+        (p.name || "").toLowerCase().includes(search)
+    );
+
+    if (matched.length === 0) {
+        return loadingMsg.edit({
+            content: "",
+            embeds: [
+                new EmbedBuilder()
+                    .setColor("Orange")
+                    .setTitle("🔍 Tag Arama")
+                    .setDescription(`İsminde **${searchRaw}** geçen oyuncu bulunamadı.`)
+            ]
+        });
+    }
+
+    const list = matched
+        .slice(0, 25)
+        .map((p, i) => {
+            const discord =
+                p.identifiers?.find(x => x.startsWith("discord:"))
+                    ?.replace("discord:", "") || "Yok";
+
+            return `**${i + 1}.** \`${p.name}\` | ID: \`${p.id}\` | Discord: \`${discord}\``;
+        })
         .join("\n");
 
     const embed = new EmbedBuilder()
         .setColor("#000000")
-        .setTitle(`🔎 Tag Arama: ${keywordRaw}`)
+        .setTitle(`🔎 FiveM Tag Arama`)
         .setDescription(list)
-        .setFooter({ text: `Toplam: ${found.size} kişi` });
+        .setFooter({
+            text: `Bulunan: ${matched.length} oyuncu`
+        });
 
-    return message.channel.send({ embeds: [embed] });
+    await loadingMsg.edit({ content: "", embeds: [embed] });
+    return;
 }
+
 
 
 
@@ -1250,6 +1263,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
