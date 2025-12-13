@@ -15,6 +15,10 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 
+const fetch = (...args) =>
+    import("node-fetch").then(({ default: fetch }) => fetch(...args));
+
+
 function cleanFiveMName(name = "") {
     return name.replace(/\^\d/g, "").toLowerCase();
 }
@@ -360,15 +364,14 @@ client.on("messageCreate", async (message) => {
                     "`"
             },
             {
-                name: "🕹️ Oyuncu Sorgulama",
-                value:
-                    "`" +
-                    ".id <oyuncuID> → Oyuncu bilgisi sorgula\n" +
-                    ".players → Sunucudaki tüm oyuncuları listele\n" +
-                    ".idisim <isim> → İsim ile oyuncu ara" +
-                    "`"
-            }
-              {
+    name: "🕹️ Oyuncu Sorgulama",
+    value:
+        "`" +
+        ".id <oyuncuID>\n" +
+        ".tag <kelime>\n" +
+        "`"
+},
+{
     name: "🛡 Gelişmiş Guard",
     value:
         "`" +
@@ -380,7 +383,7 @@ client.on("messageCreate", async (message) => {
         ".whitelistkaldır @kullanıcı\n" +
         ".whitelistler" +
         "`"
-}
+},
 {
     name: "🛡 Guard & Log",
     value:
@@ -479,17 +482,6 @@ client.on("messageCreate", async (message) => {
                     console.error("Role create error:", err);
                 }
             }
-if (cmd === "guardlog") {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
-        return message.reply("❌ Sadece admin ayarlayabilir.");
-
-    const ch = message.mentions.channels.first();
-    if (!ch) return message.reply("Kullanım: `.guardlog #kanal`");
-
-    guardLogChannelId = ch.id;
-    return message.reply(`🛡 Guard log kanalı ayarlandı → ${ch}`);
-}
-
             // ---- Kanal isimlerine göre eksikleri oluştur ----
             for (const c of backup.channels) {
                 const exists = guild.channels.cache.find(x => x.name === c.name);
@@ -522,6 +514,16 @@ if (cmd === "guardlog") {
 
             return void message.channel.send("✅ Yedek uygulanması tamamlandı. (Eksik rolleri ve kanalları ekledi, mevcutları silmedi.)");
         }
+if (cmd === "guardlog") {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
+        return message.reply("❌ Sadece admin ayarlayabilir.");
+
+    const ch = message.mentions.channels.first();
+    if (!ch) return message.reply("Kullanım: `.guardlog #kanal`");
+
+    guardLogChannelId = ch.id;
+    return message.reply(`🛡 Guard log kanalı ayarlandı → ${ch}`);
+}
 
 // ===================== GUARD KOMUTLARI =====================
 
@@ -1665,19 +1667,20 @@ client.on("guildMemberUpdate", async (oldMember, newMember) => {
         sendGuardLog(newMember.guild, embed);
     }
 
-    if (removed.size) {
-        const embed = new EmbedBuilder()
-            .setColor("Red")
-            .setTitle("➖ Rol Alındı")
-            .addFields(
-                { name: "Kullanıcı", value: newMember.user.tag },
-                { name: "Rol", value: removed.map(r => r.name).join(", ") },
-                { name: "Yetkili", value: executor ? executor.tag : "Bilinmiyor" }
-            )
-            .setTimestamp();
+   if (removed.size) {
+    const embed = new EmbedBuilder()
+        .setColor("Red")
+        .setTitle("➖ Rol Alındı")
+        .addFields(
+            { name: "Kullanıcı", value: newMember.user.tag },
+            { name: "Rol", value: removed.map(r => r.name).join(", ") }
+        )
+        .setTimestamp();
 
-        sendGuardLog(newMember.guild, embed);
-        if (!oldMember.isCommunicationDisabled() && newMember.isCommunicationDisabled()) {
+    sendGuardLog(newMember.guild, embed);
+}
+
+if (!oldMember.isCommunicationDisabled() && newMember.isCommunicationDisabled()) {
     const embed = new EmbedBuilder()
         .setColor("DarkRed")
         .setTitle("🔇 Mute Atıldı")
@@ -1694,6 +1697,7 @@ client.on("guildMemberUpdate", async (oldMember, newMember) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
