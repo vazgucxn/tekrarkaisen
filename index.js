@@ -15,9 +15,6 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 
-const fetch = (...args) =>
-    import("node-fetch").then(({ default: fetch }) => fetch(...args));
-
 
 function cleanFiveMName(name = "") {
     return name.replace(/\^\d/g, "").toLowerCase();
@@ -1696,6 +1693,7 @@ if (!oldMember.isCommunicationDisabled() && newMember.isCommunicationDisabled())
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
