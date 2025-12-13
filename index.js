@@ -651,19 +651,33 @@ if (cmd === "id") {
 }
 
 // ==========================
-//        .tag Komutu
+//        .tag Komutu (FIX)
 // ==========================
 if (cmd === "tag") {
-    const keyword = args.join(" ").toLowerCase();
-
-    if (!keyword) {
+    const keywordRaw = args.join(" ");
+    if (!keywordRaw) {
         return message.reply("Kullanım: `.tag <aranacak_kelime>`");
     }
 
-    await message.guild.members.fetch();
+    // TÜRKÇE karakter normalize
+    const normalize = (str) =>
+        str
+            .toLowerCase()
+            .replace(/ı/g, "i")
+            .replace(/İ/g, "i")
+            .replace(/ş/g, "s")
+            .replace(/ğ/g, "g")
+            .replace(/ü/g, "u")
+            .replace(/ö/g, "o")
+            .replace(/ç/g, "c");
+
+    const keyword = normalize(keywordRaw);
+
+    // 🔥 TÜM ÜYELERİ CACHE'E ÇEK
+    await message.guild.members.fetch({ force: true });
 
     const found = message.guild.members.cache.filter(m => {
-        const name = (m.nickname || m.user.username).toLowerCase();
+        const name = normalize(m.nickname || m.user.username);
         return name.includes(keyword);
     });
 
@@ -673,7 +687,7 @@ if (cmd === "tag") {
                 new EmbedBuilder()
                     .setColor("#000000")
                     .setTitle("🔍 Tag Arama")
-                    .setDescription(`İsminde **${keyword}** geçen kimse bulunamadı.`)
+                    .setDescription(`İsminde **${keywordRaw}** geçen kimse bulunamadı.`)
             ]
         });
     }
@@ -685,12 +699,13 @@ if (cmd === "tag") {
 
     const embed = new EmbedBuilder()
         .setColor("#000000")
-        .setTitle(`🔎 Tag Arama: ${keyword}`)
+        .setTitle(`🔎 Tag Arama: ${keywordRaw}`)
         .setDescription(list)
         .setFooter({ text: `Toplam: ${found.size} kişi` });
 
     return message.channel.send({ embeds: [embed] });
 }
+
 
 
         // ================================================================
@@ -1235,6 +1250,7 @@ client.on("userUpdate", async (oldUser, newUser) => {
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
