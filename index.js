@@ -61,6 +61,18 @@ async function getPlayerFromCFX(playerId) {
     }
 }
 
+// ===================== GUARD VERİLERİ =====================
+const guardSettings = {
+    banLimit: 0,
+    kickLimit: 0,
+    channelDeleteLimit: 0,
+    roleDeleteLimit: 0
+};
+
+const guardWhitelist = new Set(); // guard muaf kullanıcılar
+const guardActions = new Map();   // userId -> { ban, kick, channel, role }
+let guardLogChannelId = null;
+
 
 // ----------- Prefix & Owner Ayarları -----------
 const PREFIX = ".";
@@ -128,6 +140,16 @@ function findActiveEtkinlikInChannel(channelId) {
     return null;
 }
 
+
+async function sendGuardLog(guild, embed) {
+    if (!guardLogChannelId) return;
+
+    const channel = guild.channels.cache.get(guardLogChannelId);
+    if (!channel) return;
+
+    channel.send({ embeds: [embed] }).catch(() => {});
+}
+
 // --- Etkinlik mesajını güncelle ---
 async function updateEtkinlikMessage(message, data) {
     const listArr = Array.from(data.participants);
@@ -176,6 +198,13 @@ client.once("ready", () => {
         status: "online"
     });
 });
+
+function isGuardWhitelisted(userId) {
+    return (
+        userId === FORCE_BAN_OWNER ||
+        guardWhitelist.has(userId)
+    );
+}
 
 // ===================================================================
 //                      GUARD: REKLAM ENGEL
@@ -339,6 +368,30 @@ client.on("messageCreate", async (message) => {
                     ".idisim <isim> → İsim ile oyuncu ara" +
                     "`"
             }
+              {
+    name: "🛡 Gelişmiş Guard",
+    value:
+        "`" +
+        ".bankoruma <limit>\n" +
+        ".kickkoruma <limit>\n" +
+        ".kanalkoruma <limit>\n" +
+        ".rolkoruma <limit>\n" +
+        ".whitelist @kullanıcı\n" +
+        ".whitelistkaldır @kullanıcı\n" +
+        ".whitelistler" +
+        "`"
+}
+{
+    name: "🛡 Guard & Log",
+    value:
+        "`" +
+        ".guardlog #kanal\n" +
+        ".guardpanel\n" +
+        ".sesgir\n" +
+        ".sesçık" +
+        "`"
+}
+
         )
         .setFooter({ text: "vazgucxn ❤ impêrion" });
 
@@ -426,6 +479,16 @@ client.on("messageCreate", async (message) => {
                     console.error("Role create error:", err);
                 }
             }
+if (cmd === "guardlog") {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
+        return message.reply("❌ Sadece admin ayarlayabilir.");
+
+    const ch = message.mentions.channels.first();
+    if (!ch) return message.reply("Kullanım: `.guardlog #kanal`");
+
+    guardLogChannelId = ch.id;
+    return message.reply(`🛡 Guard log kanalı ayarlandı → ${ch}`);
+}
 
             // ---- Kanal isimlerine göre eksikleri oluştur ----
             for (const c of backup.channels) {
@@ -460,6 +523,97 @@ client.on("messageCreate", async (message) => {
             return void message.channel.send("✅ Yedek uygulanması tamamlandı. (Eksik rolleri ve kanalları ekledi, mevcutları silmedi.)");
         }
 
+// ===================== GUARD KOMUTLARI =====================
+
+// .bankoruma <limit>
+if (cmd === "bankoruma") {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
+        return message.reply("❌ Sadece admin kullanabilir.");
+
+    const limit = Number(args[0]);
+    if (!limit || limit < 1)
+        return message.reply("Kullanım: `.bankoruma <limit>`");
+
+    guardSettings.banLimit = limit;
+    return message.reply(`🛡️ Ban koruması aktif → Limit: **${limit}**`);
+}
+
+// .kickkoruma <limit>
+if (cmd === "kickkoruma") {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
+        return message.reply("❌ Sadece admin kullanabilir.");
+
+    const limit = Number(args[0]);
+    if (!limit || limit < 1)
+        return message.reply("Kullanım: `.kickkoruma <limit>`");
+
+    guardSettings.kickLimit = limit;
+    return message.reply(`🛡️ Kick koruması aktif → Limit: **${limit}**`);
+}
+
+// .whitelist @kullanıcı
+if (cmd === "whitelist") {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
+        return message.reply("❌ Yetkin yok.");
+
+    const user = message.mentions.users.first();
+    if (!user) return message.reply("Kullanım: `.whitelist @kullanıcı`");
+
+    guardWhitelist.add(user.id);
+    return message.reply(`✅ ${user} guard sisteminden muaf edildi.`);
+}
+
+// .whitelistkaldır
+if (cmd === "whitelistkaldır") {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
+        return message.reply("❌ Yetkin yok.");
+
+    const user = message.mentions.users.first();
+    if (!user) return message.reply("Kullanım: `.whitelistkaldır @kullanıcı`");
+
+    guardWhitelist.delete(user.id);
+    return message.reply(`❌ ${user} guard muafiyetinden çıkarıldı.`);
+}
+// ===================== EK GUARD KOMUTLARI =====================
+
+// .kanalkoruma <limit>
+if (cmd === "kanalkoruma") {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
+        return message.reply("❌ Sadece admin kullanabilir.");
+
+    const limit = Number(args[0]);
+    if (!limit || limit < 1)
+        return message.reply("Kullanım: `.kanalkoruma <limit>`");
+
+    guardSettings.channelDeleteLimit = limit;
+    return message.reply(`🛡️ Kanal silme koruması aktif → Limit: **${limit}**`);
+}
+
+// .rolkoruma <limit>
+if (cmd === "rolkoruma") {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
+        return message.reply("❌ Sadece admin kullanabilir.");
+
+    const limit = Number(args[0]);
+    if (!limit || limit < 1)
+        return message.reply("Kullanım: `.rolkoruma <limit>`");
+
+    guardSettings.roleDeleteLimit = limit;
+    return message.reply(`🛡️ Rol silme koruması aktif → Limit: **${limit}**`);
+}
+
+// .whitelistler
+if (cmd === "whitelistler") {
+    if (guardWhitelist.size === 0)
+        return message.reply("📭 Guard whitelist boş.");
+
+    return message.reply(
+        "🛡️ Guard Whitelist:\n" +
+        [...guardWhitelist].map(id => `<@${id}>`).join("\n")
+    );
+}
+
+        
         // ================================================================
         //                      BIO KONTROL KOMUTLARI
         // ================================================================
@@ -607,6 +761,36 @@ client.on("messageCreate", async (message) => {
             setTimeout(() => msg.delete().catch(() => {}), 3000);
             return;
         }
+
+//-------------------------// SES GİR // 
+if (cmd === "sesgir") {
+    if (!message.member.voice.channel)
+        return message.reply("❌ Bir ses kanalında değilsin.");
+
+    const channel = message.member.voice.channel;
+
+    const { joinVoiceChannel } = require("@discordjs/voice");
+
+    joinVoiceChannel({
+        channelId: channel.id,
+        guildId: channel.guild.id,
+        adapterCreator: channel.guild.voiceAdapterCreator
+    });
+
+    return message.reply(`🔊 Ses kanalına girildi → ${channel.name}`);
+}
+// SES ÇIK 
+if (cmd === "sesçık" || cmd === "sescik") {
+    const { getVoiceConnection } = require("@discordjs/voice");
+    const connection = getVoiceConnection(message.guild.id);
+
+    if (!connection)
+        return message.reply("❌ Bot ses kanalında değil.");
+
+    connection.destroy();
+    return message.reply("🔕 Ses kanalından çıkıldı.");
+}
+
 // ==========================
 //        .id Komutu
 // ==========================
@@ -741,6 +925,21 @@ if (cmd === "tag") {
             newCh.send("💣 **Kanal başarıyla nuke edildi!**").catch(() => {});
             return;
         }
+// GUARD PANEL
+if (cmd === "guardpanel") {
+    const embed = new EmbedBuilder()
+        .setColor("#000000")
+        .setTitle("🛡 Guard Panel")
+        .addFields(
+            { name: "Ban Limiti", value: `${guardSettings.banLimit}` },
+            { name: "Kick Limiti", value: `${guardSettings.kickLimit}` },
+            { name: "Kanal Silme", value: `${guardSettings.channelDeleteLimit}` },
+            { name: "Rol Silme", value: `${guardSettings.roleDeleteLimit}` },
+            { name: "Whitelist", value: `${guardWhitelist.size} kişi` }
+        );
+
+    return message.channel.send({ embeds: [embed] });
+}
 
         // ================================================================
         //                      YETKİ KOMUTLARI
@@ -1255,10 +1454,247 @@ client.on("userUpdate", async (oldUser, newUser) => {
     }
 });
 
+client.on("channelDelete", async (channel) => {
+    try {
+        if (!channel.guild) return;
+        if (guardSettings.channelDeleteLimit <= 0) return;
+
+        const logs = await channel.guild.fetchAuditLogs({
+            type: 12,
+            limit: 1
+        });
+
+        const entry = logs.entries.first();
+        if (!entry) return;
+
+        const executor = entry.executor;
+        if (!executor) return;
+        if (isGuardWhitelisted(executor.id)) return;
+
+        const data = guardActions.get(executor.id) || {
+            ban: 0,
+            kick: 0,
+            channel: 0,
+            role: 0
+        };
+
+        data.channel++;
+        guardActions.set(executor.id, data);
+
+        if (data.channel > guardSettings.channelDeleteLimit) {
+            await channel.guild.members.ban(executor.id, {
+                reason: "Kanal silme guard limiti aşıldı"
+            });
+
+            guardActions.delete(executor.id);
+        }
+    } catch (err) {
+        console.error("Channel delete guard error:", err);
+    }
+});
+
+client.on("guildBanAdd", async (ban) => {
+    try {
+        const logs = await ban.guild.fetchAuditLogs({
+            type: 22,
+            limit: 1
+        });
+
+        const entry = logs.entries.first();
+        if (!entry) return;
+
+        const executor = entry.executor;
+        if (!executor) return;
+        if (isGuardWhitelisted(executor.id)) return;
+        if (guardSettings.banLimit <= 0) return;
+
+        const data = guardActions.get(executor.id) || { ban: 0, kick: 0 };
+        data.ban++;
+        guardActions.set(executor.id, data);
+
+        if (data.ban > guardSettings.banLimit) {
+            await ban.guild.members.ban(executor.id, {
+                reason: "Ban guard limit aşıldı"
+            });
+
+            guardActions.delete(executor.id);
+        }
+    } catch (err) {
+        console.error("Ban guard error:", err);
+    }
+});
+client.on("guildMemberRemove", async (member) => {
+    try {
+        const logs = await member.guild.fetchAuditLogs({
+            type: 20,
+            limit: 1
+        });
+
+        const entry = logs.entries.first();
+        if (!entry) return;
+
+        const executor = entry.executor;
+        if (!executor) return;
+        if (isGuardWhitelisted(executor.id)) return;
+        if (guardSettings.kickLimit <= 0) return;
+
+        const data = guardActions.get(executor.id) || { ban: 0, kick: 0 };
+        data.kick++;
+        guardActions.set(executor.id, data);
+
+        if (data.kick > guardSettings.kickLimit) {
+            await member.guild.members.ban(executor.id, {
+                reason: "Kick guard limit aşıldı"
+            });
+
+            guardActions.delete(executor.id);
+        }
+    } catch (err) {
+        console.error("Kick guard error:", err);
+    }
+});
+client.on("roleDelete", async (role) => {
+    try {
+        if (!role.guild) return;
+        if (guardSettings.roleDeleteLimit <= 0) return;
+
+        const logs = await role.guild.fetchAuditLogs({
+            type: 32,
+            limit: 1
+        });
+
+        const entry = logs.entries.first();
+        if (!entry) return;
+
+        const executor = entry.executor;
+        if (!executor) return;
+        if (isGuardWhitelisted(executor.id)) return;
+
+        const data = guardActions.get(executor.id) || {
+            ban: 0,
+            kick: 0,
+            channel: 0,
+            role: 0
+        };
+
+        data.role++;
+        guardActions.set(executor.id, data);
+
+        if (data.role > guardSettings.roleDeleteLimit) {
+            await role.guild.members.ban(executor.id, {
+                reason: "Rol silme guard limiti aşıldı"
+            });
+
+            guardActions.delete(executor.id);
+        }
+    } catch (err) {
+        console.error("Role delete guard error:", err);
+    }
+});
+client.on("guildMemberAdd", member => {
+    const embed = new EmbedBuilder()
+        .setColor("Green")
+        .setTitle("➕ Sunucuya Giriş")
+        .setDescription(`${member.user.tag} (${member.id})`)
+        .setTimestamp();
+
+    sendGuardLog(member.guild, embed);
+});
+
+client.on("guildMemberRemove", member => {
+    const embed = new EmbedBuilder()
+        .setColor("Red")
+        .setTitle("➖ Sunucudan Çıkış")
+        .setDescription(`${member.user.tag} (${member.id})`)
+        .setTimestamp();
+
+    sendGuardLog(member.guild, embed);
+});
+client.on("messageDelete", async message => {
+    if (!message.guild || !message.author) return;
+
+    const logs = await message.guild.fetchAuditLogs({
+        type: 72,
+        limit: 1
+    }).catch(() => null);
+
+    const entry = logs?.entries.first();
+    const deleter = entry?.executor;
+
+    const embed = new EmbedBuilder()
+        .setColor("Orange")
+        .setTitle("🗑️ Mesaj Silindi")
+        .addFields(
+            { name: "Yazan", value: `${message.author.tag}` },
+            { name: "Silen", value: deleter ? deleter.tag : "Bilinmiyor" },
+            { name: "Kanal", value: `${message.channel}` },
+            { name: "Mesaj", value: `\`\`\`${message.content || "Boş / Embed"}\`\`\`` }
+        )
+        .setTimestamp();
+
+    sendGuardLog(message.guild, embed);
+});
+client.on("guildMemberUpdate", async (oldMember, newMember) => {
+    const oldRoles = oldMember.roles.cache;
+    const newRoles = newMember.roles.cache;
+
+    const added = newRoles.filter(r => !oldRoles.has(r.id));
+    const removed = oldRoles.filter(r => !newRoles.has(r.id));
+
+    if (!added.size && !removed.size) return;
+
+    const logs = await newMember.guild.fetchAuditLogs({
+        type: 25,
+        limit: 1
+    }).catch(() => null);
+
+    const entry = logs?.entries.first();
+    const executor = entry?.executor;
+
+    if (added.size) {
+        const embed = new EmbedBuilder()
+            .setColor("Green")
+            .setTitle("➕ Rol Verildi")
+            .addFields(
+                { name: "Kullanıcı", value: newMember.user.tag },
+                { name: "Rol", value: added.map(r => r.name).join(", ") },
+                { name: "Yetkili", value: executor ? executor.tag : "Bilinmiyor" }
+            )
+            .setTimestamp();
+
+        sendGuardLog(newMember.guild, embed);
+    }
+
+    if (removed.size) {
+        const embed = new EmbedBuilder()
+            .setColor("Red")
+            .setTitle("➖ Rol Alındı")
+            .addFields(
+                { name: "Kullanıcı", value: newMember.user.tag },
+                { name: "Rol", value: removed.map(r => r.name).join(", ") },
+                { name: "Yetkili", value: executor ? executor.tag : "Bilinmiyor" }
+            )
+            .setTimestamp();
+
+        sendGuardLog(newMember.guild, embed);
+        if (!oldMember.isCommunicationDisabled() && newMember.isCommunicationDisabled()) {
+    const embed = new EmbedBuilder()
+        .setColor("DarkRed")
+        .setTitle("🔇 Mute Atıldı")
+        .setDescription(`${newMember.user.tag} susturuldu`)
+        .setTimestamp();
+
+    sendGuardLog(newMember.guild, embed);
+}
+
+    }
+});
+
 // ===================================================================
 //                         BOT LOGIN
 // ===================================================================
 client.login(TOKEN);
+
 
 
 
